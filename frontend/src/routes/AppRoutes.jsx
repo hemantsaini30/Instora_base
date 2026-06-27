@@ -8,6 +8,7 @@ import BatchesPage from '../pages/Admin/BatchesPage'
 import StudentsPage from '../pages/Admin/StudentsPage'
 import TeacherDashboard from '../pages/Teacher/TeacherDashboard'
 import StudentDashboard from '../pages/Student/StudentDashboard'
+import AttendancePage from '../pages/Admin/AttendancePage'
 
 const AppRoutes = () => {
   return (
@@ -28,6 +29,11 @@ const AppRoutes = () => {
         <Route path="/admin/students" element={
           <ProtectedRoute allowedRoles={['admin']}>
             <StudentsPage />
+          </ProtectedRoute>
+        } />
+        <Route path="/admin/attendance" element={
+          <ProtectedRoute allowedRoles={['admin']}>
+            <AttendancePage />
           </ProtectedRoute>
         } />
         <Route path="/teacher/dashboard" element={
