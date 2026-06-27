@@ -4,6 +4,8 @@ import PublicLayout from '../layouts/PublicLayout'
 import LandingPage from '../pages/Public/LandingPage'
 import LoginPage from '../pages/Public/LoginPage'
 import AdminDashboard from '../pages/Admin/AdminDashboard'
+import BatchesPage from '../pages/Admin/BatchesPage'
+import StudentsPage from '../pages/Admin/StudentsPage'
 import TeacherDashboard from '../pages/Teacher/TeacherDashboard'
 import StudentDashboard from '../pages/Student/StudentDashboard'
 
@@ -16,6 +18,16 @@ const AppRoutes = () => {
         <Route path="/admin/dashboard" element={
           <ProtectedRoute allowedRoles={['admin']}>
             <AdminDashboard />
+          </ProtectedRoute>
+        } />
+        <Route path="/admin/batches" element={
+          <ProtectedRoute allowedRoles={['admin']}>
+            <BatchesPage />
+          </ProtectedRoute>
+        } />
+        <Route path="/admin/students" element={
+          <ProtectedRoute allowedRoles={['admin']}>
+            <StudentsPage />
           </ProtectedRoute>
         } />
         <Route path="/teacher/dashboard" element={

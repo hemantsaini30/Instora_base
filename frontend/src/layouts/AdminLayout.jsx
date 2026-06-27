@@ -11,13 +11,13 @@ const AdminLayout = ({ children }) => {
   }
 
   const navItems = [
-    { label: 'Dashboard', path: '/admin/dashboard', icon: '⊞' },
-    { label: 'Students', path: '/admin/students', icon: '👤' },
-    { label: 'Batches', path: '/admin/batches', icon: '📚' },
-    { label: 'Attendance', path: '/admin/attendance', icon: '✅' },
-    { label: 'Fees', path: '/admin/fees', icon: '₹' },
-    { label: 'Inquiries', path: '/admin/inquiries', icon: '📋' },
-  ]
+  { label: 'Dashboard', path: '/admin/dashboard', icon: '⊞' },
+  { label: 'Students', path: '/admin/students', icon: '👤' },
+  { label: 'Batches', path: '/admin/batches', icon: '📚' },
+  { label: 'Attendance', path: '/admin/attendance', icon: '✅' },
+  { label: 'Fees', path: '/admin/fees', icon: '₹' },
+  { label: 'Inquiries', path: '/admin/inquiries', icon: '📋' },
+]
 
   return (
     <div className="min-h-screen flex">
