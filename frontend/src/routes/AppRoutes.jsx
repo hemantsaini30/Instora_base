@@ -11,6 +11,7 @@ import StudentDashboard from '../pages/Student/StudentDashboard'
 import AttendancePage from '../pages/Admin/AttendancePage'
 import FeesPage from '../pages/Admin/FeesPage'
 import InquiriesPage from '../pages/Admin/InquiriesPage'
+import TeachersPage from '../pages/Admin/TeachersPage'
 const AppRoutes = () => {
   return (
     <BrowserRouter>
@@ -45,6 +46,11 @@ const AppRoutes = () => {
         <Route path="/admin/inquiries" element={
           <ProtectedRoute allowedRoles={['admin']}>
             <InquiriesPage />
+          </ProtectedRoute>
+        } />
+        <Route path="/admin/teachers" element={
+          <ProtectedRoute allowedRoles={['admin']}>
+            <TeachersPage />
           </ProtectedRoute>
         } />
         <Route path="/teacher/dashboard" element={
