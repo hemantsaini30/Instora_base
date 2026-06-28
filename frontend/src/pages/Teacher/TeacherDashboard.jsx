@@ -1,21 +1,276 @@
-import { useAuth } from '../../context/AuthContext'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../../context/AuthContext'
+import { getAllBatches } from '../../services/batchApi'
+import { getAllStudents } from '../../services/studentApi'
+import { markAttendance, getAttendanceByBatchAndDate, getBatchAttendanceSummary } from '../../services/attendanceApi'
 
 const TeacherDashboard = () => {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const [batches, setBatches] = useState([])
+  const [selectedBatch, setSelectedBatch] = useState('')
+  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0])
+  const [students, setStudents] = useState([])
+  const [attendance, setAttendance] = useState({})
+  const [summary, setSummary] = useState([])
+  const [tab, setTab] = useState('mark')
+  const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState('')
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    getAllBatches()
+      .then(res => setBatches(res.data.data))
+      .finally(() => setLoading(false))
+  }, [])
+
+  useEffect(() => {
+    if (!selectedBatch) return
+    setStudents([])
+    setAttendance({})
+    setMessage('')
+
+    getAllStudents().then(res => {
+      const batchStudents = res.data.data.filter(s => s.batchId?._id === selectedBatch)
+      setStudents(batchStudents)
+      const initial = {}
+      batchStudents.forEach(s => { initial[s._id] = 'present' })
+      setAttendance(initial)
+    })
+
+    getAttendanceByBatchAndDate(selectedBatch, selectedDate).then(res => {
+      const existing = {}
+      res.data.data.forEach(r => { existing[r.studentId?._id] = r.status })
+      if (Object.keys(existing).length > 0) setAttendance(existing)
+    }).catch(() => {})
+
+    getBatchAttendanceSummary(selectedBatch).then(res => setSummary(res.data.data)).catch(() => {})
+  }, [selectedBatch, selectedDate])
+
+  const toggleAll = (status) => {
+    const updated = {}
+    students.forEach(s => { updated[s._id] = status })
+    setAttendance(updated)
+  }
+
+  const handleSave = async () => {
+    if (!selectedBatch || students.length === 0) return
+    setSaving(true)
+    setMessage('')
+    try {
+      const records = students.map(s => ({ studentId: s._id, status: attendance[s._id] || 'absent' }))
+      await markAttendance({ batchId: selectedBatch, date: selectedDate, records })
+      setMessage('Attendance saved successfully')
+      getBatchAttendanceSummary(selectedBatch).then(res => setSummary(res.data.data))
+    } catch {
+      setMessage('Failed to save attendance')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const presentCount = Object.values(attendance).filter(v => v === 'present').length
+  const absentCount = Object.values(attendance).filter(v => v === 'absent').length
+
+  const getBarColor = (pct) => {
+    if (pct >= 75) return 'bg-emerald-500'
+    if (pct >= 50) return 'bg-amber-500'
+    return 'bg-red-400'
+  }
+
+  const getPercentageColor = (pct) => {
+    if (pct >= 75) return 'text-emerald-600'
+    if (pct >= 50) return 'text-amber-600'
+    return 'text-red-500'
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <div className="text-center">
-        <h1 className="text-2xl font-bold text-purple-800 mb-2">Welcome, {user?.username}</h1>
-        <p className="text-gray-500 mb-6">Teacher Dashboard — Phase 2 features coming soon.</p>
-        <button
-          onClick={() => { logout(); navigate('/login') }}
-          className="text-sm text-gray-400 hover:text-gray-600 underline"
-        >
-          Sign out
-        </button>
+    <div className="min-h-screen bg-gray-50">
+      <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+        <span className="text-xl font-bold text-blue-800">
+          Inst<span className="text-emerald-600">ora</span>
+        </span>
+        <div className="flex items-center gap-6">
+          <span className="text-sm text-gray-500">{user?.username} · Teacher</span>
+          <button
+            onClick={() => { logout(); navigate('/login') }}
+            className="text-sm text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            Sign out
+          </button>
+        </div>
+      </header>
+
+      <div className="max-w-5xl mx-auto px-6 py-8">
+        <div className="mb-8">
+          <h1 className="text-2xl font-bold text-gray-900">Teacher Dashboard</h1>
+          <p className="text-gray-500 text-sm mt-1">Mark attendance and track your batches</p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4 mb-8">
+          <div className="bg-white border border-gray-200 rounded-xl p-5">
+            <p className="text-xs text-gray-500 mb-1">Total batches</p>
+            <p className="text-3xl font-bold text-blue-700">{batches.length}</p>
+          </div>
+          <div className="bg-white border border-gray-200 rounded-xl p-5">
+            <p className="text-xs text-gray-500 mb-1">Students in selected batch</p>
+            <p className="text-3xl font-bold text-emerald-600">{students.length}</p>
+          </div>
+        </div>
+
+        <div className="flex gap-4 mb-6">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Batch</label>
+            <select
+              value={selectedBatch}
+              onChange={(e) => setSelectedBatch(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white min-w-48"
+            >
+              <option value="">Select batch</option>
+              {batches.map(b => <option key={b._id} value={b._id}>{b.name}</option>)}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Date</label>
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+
+        {selectedBatch && (
+          <div className="flex gap-1 mb-6 bg-gray-100 p-1 rounded-lg w-fit">
+            <button
+              onClick={() => setTab('mark')}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${tab === 'mark' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              Mark attendance
+            </button>
+            <button
+              onClick={() => setTab('summary')}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${tab === 'summary' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              Summary
+            </button>
+          </div>
+        )}
+
+        {!selectedBatch && (
+          <div className="text-center py-16 text-gray-400">
+            <p className="text-lg mb-1">Select a batch to get started</p>
+          </div>
+        )}
+
+        {selectedBatch && tab === 'mark' && (
+          <div>
+            {message && (
+              <div className={`text-sm px-4 py-3 rounded-lg mb-4 ${message.includes('success') ? 'bg-emerald-50 border border-emerald-200 text-emerald-600' : 'bg-red-50 border border-red-200 text-red-600'}`}>
+                {message}
+              </div>
+            )}
+            {students.length === 0 ? (
+              <div className="text-center py-12 text-gray-400">
+                <p>No students in this batch</p>
+              </div>
+            ) : (
+              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gray-50">
+                  <div className="flex items-center gap-4 text-sm">
+                    <span className="text-gray-600">{students.length} students</span>
+                    <span className="text-emerald-600 font-medium">{presentCount} present</span>
+                    <span className="text-red-500 font-medium">{absentCount} absent</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => toggleAll('present')} className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1.5 rounded-lg hover:bg-emerald-100 transition-colors">
+                      All present
+                    </button>
+                    <button onClick={() => toggleAll('absent')} className="text-xs bg-red-50 text-red-600 border border-red-200 px-3 py-1.5 rounded-lg hover:bg-red-100 transition-colors">
+                      All absent
+                    </button>
+                  </div>
+                </div>
+                {students.map((student, i) => (
+                  <div key={student._id} className={`flex items-center justify-between px-5 py-4 ${i !== students.length - 1 ? 'border-b border-gray-100' : ''}`}>
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-xs font-bold">
+                        {student.fullName.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">{student.fullName}</p>
+                        <p className="text-xs text-gray-400">{student.userId?.username}</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setAttendance({ ...attendance, [student._id]: 'present' })}
+                        className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-colors ${attendance[student._id] === 'present' ? 'bg-emerald-500 text-white' : 'bg-gray-100 text-gray-500 hover:bg-emerald-50 hover:text-emerald-600'}`}
+                      >
+                        Present
+                      </button>
+                      <button
+                        onClick={() => setAttendance({ ...attendance, [student._id]: 'absent' })}
+                        className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-colors ${attendance[student._id] === 'absent' ? 'bg-red-400 text-white' : 'bg-gray-100 text-gray-500 hover:bg-red-50 hover:text-red-500'}`}
+                      >
+                        Absent
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                <div className="px-5 py-4 border-t border-gray-100 bg-gray-50 flex justify-end">
+                  <button
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="bg-blue-700 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-blue-800 transition-colors disabled:opacity-50"
+                  >
+                    {saving ? 'Saving...' : 'Save attendance'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {selectedBatch && tab === 'summary' && (
+          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+            {summary.length === 0 ? (
+              <div className="text-center py-12 text-gray-400">
+                <p>No attendance data yet</p>
+              </div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-200">
+                    <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Student</th>
+                    <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Present</th>
+                    <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Absent</th>
+                    <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Attendance %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {summary.map((row, i) => (
+                    <tr key={row.studentId} className={`border-b border-gray-100 ${i === summary.length - 1 ? 'border-b-0' : ''}`}>
+                      <td className="px-5 py-4 font-medium text-gray-900">{row.fullName}</td>
+                      <td className="px-5 py-4 text-emerald-600 font-medium">{row.present}</td>
+                      <td className="px-5 py-4 text-red-500 font-medium">{row.absent}</td>
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-24 bg-gray-100 rounded-full h-1.5">
+                            <div className={`h-1.5 rounded-full ${getBarColor(row.percentage)}`} style={{ width: `${row.percentage}%` }} />
+                          </div>
+                          <span className={`text-sm font-semibold ${getPercentageColor(row.percentage)}`}>{row.percentage}%</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

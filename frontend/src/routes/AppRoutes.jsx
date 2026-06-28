@@ -9,7 +9,8 @@ import StudentsPage from '../pages/Admin/StudentsPage'
 import TeacherDashboard from '../pages/Teacher/TeacherDashboard'
 import StudentDashboard from '../pages/Student/StudentDashboard'
 import AttendancePage from '../pages/Admin/AttendancePage'
-
+import FeesPage from '../pages/Admin/FeesPage'
+import InquiriesPage from '../pages/Admin/InquiriesPage'
 const AppRoutes = () => {
   return (
     <BrowserRouter>
@@ -34,6 +35,16 @@ const AppRoutes = () => {
         <Route path="/admin/attendance" element={
           <ProtectedRoute allowedRoles={['admin']}>
             <AttendancePage />
+          </ProtectedRoute>
+        } />
+        <Route path="/admin/fees" element={
+          <ProtectedRoute allowedRoles={['admin']}>
+            <FeesPage />
+          </ProtectedRoute>
+        } />
+        <Route path="/admin/inquiries" element={
+          <ProtectedRoute allowedRoles={['admin']}>
+            <InquiriesPage />
           </ProtectedRoute>
         } />
         <Route path="/teacher/dashboard" element={

@@ -3,10 +3,10 @@ const router = express.Router();
 const { protect, authorize } = require('../middlewares/authMiddleware');
 const { createBatch, getAllBatches, deleteBatch } = require('../controllers/batchController');
 
-router.use(protect, authorize('admin'));
+router.use(protect);
 
 router.get('/', getAllBatches);
-router.post('/', createBatch);
-router.delete('/:id', deleteBatch);
+router.post('/', authorize('admin'), createBatch);
+router.delete('/:id', authorize('admin'), deleteBatch);
 
 module.exports = router;

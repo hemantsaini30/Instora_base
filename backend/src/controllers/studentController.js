@@ -61,4 +61,18 @@ const deleteStudent = async (req, res, next) => {
   }
 };
 
-module.exports = { createStudent, getAllStudents, getStudentById, deleteStudent };
+const getMyProfile = async (req, res, next) => {
+  try {
+    const student = await Student.findOne({ userId: req.user.id })
+      .populate('userId', 'username')
+      .populate('batchId', 'name course');
+    if (!student) {
+      return res.status(404).json({ success: false, message: 'Student profile not found' });
+    }
+    res.json({ success: true, data: student });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { createStudent, getAllStudents, getStudentById, deleteStudent, getMyProfile };
