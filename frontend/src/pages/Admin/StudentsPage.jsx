@@ -70,7 +70,7 @@ const StudentsPage = () => {
 
   return (
     <AdminLayout>
-      <div className="p-8">
+      <div className="p-4 md:p-8">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Students</h1>
@@ -96,7 +96,7 @@ const StudentsPage = () => {
             {batches.length === 0 ? (
               <p className="text-amber-600 text-sm">No batches found. Please create a batch first.</p>
             ) : (
-              <form onSubmit={handleCreate} className="grid grid-cols-2 gap-4">
+              <form onSubmit={handleCreate} className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1">
                   <label className="text-sm font-medium text-gray-700">Full name</label>
                   <input
@@ -225,7 +225,7 @@ const StudentsPage = () => {
             <p className="text-sm">{!search && 'Click "Add student" to enroll your first student'}</p>
           </div>
         ) : (
-          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200">

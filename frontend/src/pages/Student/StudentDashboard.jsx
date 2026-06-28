@@ -107,7 +107,7 @@ const StudentDashboard = () => {
           </p>
         </div>
 
-        <div className="grid grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
           <div className="bg-white border border-gray-200 rounded-xl p-5">
             <p className="text-xs text-gray-500 mb-1">Attendance</p>
             <p className={`text-3xl font-bold ${getAttendanceColor(attendance?.percentage || 0)}`}>

@@ -31,7 +31,7 @@ const AdminDashboard = () => {
 
   return (
     <AdminLayout>
-      <div className="p-8">
+      <div className="p-4 md:p-8">
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-gray-900">
             {getHour()}, {user?.username}
@@ -42,7 +42,7 @@ const AdminDashboard = () => {
         </div>
 
         {loading ? (
-          <div className="grid grid-cols-4 gap-4 mb-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
             {[1,2,3,4].map(i => (
               <div key={i} className="bg-white border border-gray-200 rounded-xl p-5 animate-pulse">
                 <div className="h-3 bg-gray-100 rounded w-24 mb-3"></div>

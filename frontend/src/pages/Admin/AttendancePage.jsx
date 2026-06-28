@@ -117,7 +117,7 @@ const AttendancePage = () => {
 
   return (
     <AdminLayout>
-      <div className="p-8">
+      <div className="p-4 md:p-8">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Attendance</h1>
           <p className="text-gray-500 text-sm mt-1">Mark and track student attendance by batch</p>
@@ -286,7 +286,7 @@ const AttendancePage = () => {
         )}
 
         {selectedBatch && tab === 'summary' && (
-          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden overflow-x-auto">
             {summary.length === 0 ? (
               <div className="text-center py-12 text-gray-400">
                 <p>No attendance data yet for this batch</p>

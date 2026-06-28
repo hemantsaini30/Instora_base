@@ -55,7 +55,7 @@ const InquiriesPage = () => {
 
   return (
     <AdminLayout>
-      <div className="p-8">
+      <div className="p-4 md:p-8">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Inquiries</h1>
           <p className="text-gray-500 text-sm mt-1">Walk-in and online enquiries from prospective students</p>
@@ -96,7 +96,7 @@ const InquiriesPage = () => {
             <p className="text-sm">Inquiries from the landing page form will appear here</p>
           </div>
         ) : (
-          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200">

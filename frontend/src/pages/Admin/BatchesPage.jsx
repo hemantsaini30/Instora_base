@@ -53,7 +53,7 @@ const BatchesPage = () => {
 
   return (
     <AdminLayout>
-      <div className="p-8">
+      <div className="p-4 md:p-8">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Batches</h1>
@@ -131,7 +131,7 @@ const BatchesPage = () => {
             <p className="text-sm">Click "New batch" to create your first one</p>
           </div>
         ) : (
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
             {batches.map((batch) => (
               <div key={batch._id} className="bg-white border border-gray-200 rounded-xl p-5">
                 <div className="flex items-start justify-between mb-3">

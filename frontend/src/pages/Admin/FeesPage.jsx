@@ -144,14 +144,14 @@ const FeesPage = () => {
 
   return (
     <AdminLayout>
-      <div className="p-8">
+      <div className="p-4 md:p-8">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Fee Management</h1>
           <p className="text-gray-500 text-sm mt-1">Student-wise fee tracking and payment records</p>
         </div>
 
         {summary && (
-          <div className="grid grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <div className="bg-white border border-gray-200 rounded-xl p-4">
               <p className="text-xs text-gray-500 mb-1">This month</p>
               <p className="text-xl font-bold text-gray-900">{fmt(summary.thisMonthBilled)} billed</p>
@@ -224,7 +224,7 @@ const FeesPage = () => {
                 <p className="text-sm">Add students from the Students page first</p>
               </div>
             ) : (
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                 {filteredStudents.map(s => (
                   <button
                     key={s._id}
@@ -266,7 +266,7 @@ const FeesPage = () => {
                 <p className="text-lg mb-1">No payments recorded yet</p>
               </div>
             ) : (
-              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-200">
