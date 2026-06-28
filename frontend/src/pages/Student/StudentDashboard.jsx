@@ -142,18 +142,29 @@ const StudentDashboard = () => {
 
         {attendance?.records?.length > 0 && (
           <div className="bg-white border border-gray-200 rounded-xl p-6 mb-6">
-            <h2 className="font-semibold text-gray-800 mb-4">Recent attendance</h2>
-            <div className="flex flex-col gap-2">
-              {attendance.records.slice(0, 10).map((r) => (
-                <div key={r._id} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
-                  <span className="text-sm text-gray-600">{r.date}</span>
-                  <span className={`text-xs px-3 py-1 rounded-full font-medium ${
-                    r.status === 'present' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-500'
+            <h2 className="font-semibold text-gray-800 mb-4">Attendance history</h2>
+            <div className="flex flex-wrap gap-2 mb-4">
+              {[...attendance.records].reverse().slice(0, 30).map((r) => (
+                <div key={r._id} className="flex flex-col items-center gap-1">
+                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center text-xs font-semibold ${
+                    r.status === 'present'
+                      ? 'bg-emerald-100 text-emerald-700'
+                      : 'bg-red-100 text-red-500'
                   }`}>
-                    {r.status.charAt(0).toUpperCase() + r.status.slice(1)}
-                  </span>
+                    {r.status === 'present' ? 'P' : 'A'}
+                  </div>
+                  <span className="text-xs text-gray-400">{r.date.slice(5)}</span>
                 </div>
               ))}
+            </div>
+            <div className="flex items-center gap-5 text-xs text-gray-500 border-t border-gray-100 pt-3">
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 h-3 bg-emerald-100 rounded-sm inline-block" /> Present
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 h-3 bg-red-100 rounded-sm inline-block" /> Absent
+              </span>
+              <span className="ml-auto text-gray-400">Showing last {Math.min(attendance.records.length, 30)} days</span>
             </div>
           </div>
         )}

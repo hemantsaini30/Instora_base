@@ -7,3 +7,5 @@ export const getAttendanceByStudent = (studentId) =>
   API.get(`/api/attendance/student/${studentId}`)
 export const getBatchAttendanceSummary = (batchId) =>
   API.get(`/api/attendance/summary/${batchId}`)
+export const getDatewiseAttendance = (batchId) =>
+  API.get(`/api/attendance/datewise/${batchId}`)

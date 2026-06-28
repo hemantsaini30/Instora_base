@@ -6,7 +6,9 @@ import {
   markAttendance,
   getAttendanceByBatchAndDate,
   getBatchAttendanceSummary,
+  getDatewiseAttendance,
 } from '../../services/attendanceApi'
+import AttendanceChart from '../../components/AttendanceChart'
 
 const AttendancePage = () => {
   const [batches, setBatches] = useState([])
@@ -15,6 +17,8 @@ const AttendancePage = () => {
   const [students, setStudents] = useState([])
   const [attendance, setAttendance] = useState({})
   const [summary, setSummary] = useState([])
+  const [datewiseData, setDatewiseData] = useState([])
+  const [isLocked, setIsLocked] = useState(false)
   const [tab, setTab] = useState('mark')
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
@@ -30,6 +34,7 @@ const AttendancePage = () => {
     setAttendance({})
     setMessage('')
     setError('')
+    setIsLocked(false)
 
     getAllStudents().then(res => {
       const batchStudents = res.data.data.filter(s => s.batchId?._id === selectedBatch)
@@ -37,16 +42,28 @@ const AttendancePage = () => {
 
       const initial = {}
       batchStudents.forEach(s => { initial[s._id] = 'present' })
-      setAttendance(initial)
+
+      getAttendanceByBatchAndDate(selectedBatch, selectedDate).then(attRes => {
+        const existing = {}
+        attRes.data.data.forEach(r => { existing[r.studentId?._id] = r.status })
+        if (Object.keys(existing).length > 0) {
+          setAttendance(existing)
+          setIsLocked(true)
+        } else {
+          setAttendance(initial)
+          setIsLocked(false)
+        }
+      }).catch(() => { setAttendance(initial) })
     })
 
-    getAttendanceByBatchAndDate(selectedBatch, selectedDate).then(res => {
-      const existing = {}
-      res.data.data.forEach(r => { existing[r.studentId?._id] = r.status })
-      if (Object.keys(existing).length > 0) setAttendance(existing)
-    }).catch(() => {})
+    getBatchAttendanceSummary(selectedBatch)
+      .then(res => setSummary(res.data.data))
+      .catch(() => {})
 
-    getBatchAttendanceSummary(selectedBatch).then(res => setSummary(res.data.data)).catch(() => {})
+    getDatewiseAttendance(selectedBatch)
+      .then(res => setDatewiseData(res.data.data))
+      .catch(() => {})
+
   }, [selectedBatch, selectedDate])
 
   const toggleAll = (status) => {
@@ -61,15 +78,26 @@ const AttendancePage = () => {
     setMessage('')
     setError('')
     try {
-      const records = students.map(s => ({ studentId: s._id, status: attendance[s._id] || 'absent' }))
+      const records = students.map(s => ({
+        studentId: s._id,
+        status: attendance[s._id] || 'absent',
+      }))
       await markAttendance({ batchId: selectedBatch, date: selectedDate, records })
+      setIsLocked(true)
       setMessage('Attendance saved successfully')
       getBatchAttendanceSummary(selectedBatch).then(res => setSummary(res.data.data))
+      getDatewiseAttendance(selectedBatch).then(res => setDatewiseData(res.data.data))
     } catch {
       setError('Failed to save attendance')
     } finally {
       setSaving(false)
     }
+  }
+
+  const handleMarkAgain = () => {
+    if (!window.confirm(`Re-mark attendance for ${selectedDate}? This will update existing records.`)) return
+    setIsLocked(false)
+    setMessage('')
   }
 
   const presentCount = Object.values(attendance).filter(v => v === 'present').length
@@ -120,18 +148,17 @@ const AttendancePage = () => {
 
         {selectedBatch && (
           <div className="flex gap-1 mb-6 bg-gray-100 p-1 rounded-lg w-fit">
-            <button
-              onClick={() => setTab('mark')}
-              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${tab === 'mark' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-            >
-              Mark attendance
-            </button>
-            <button
-              onClick={() => setTab('summary')}
-              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${tab === 'summary' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-            >
-              Summary report
-            </button>
+            {['mark', 'summary', 'chart'].map((t) => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  tab === t ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {t === 'mark' ? 'Mark attendance' : t === 'summary' ? 'Summary report' : 'Date-wise chart'}
+              </button>
+            ))}
           </div>
         )}
 
@@ -145,8 +172,14 @@ const AttendancePage = () => {
         {selectedBatch && tab === 'mark' && (
           <div>
             {message && (
-              <div className="bg-emerald-50 border border-emerald-200 text-emerald-600 text-sm px-4 py-3 rounded-lg mb-4">
-                {message}
+              <div className="bg-emerald-50 border border-emerald-200 text-emerald-600 text-sm px-4 py-3 rounded-lg mb-4 flex items-center justify-between">
+                <span>{message}</span>
+                <button
+                  onClick={handleMarkAgain}
+                  className="text-xs bg-emerald-600 text-white px-3 py-1 rounded-lg hover:bg-emerald-700 transition-colors ml-4"
+                >
+                  Mark again
+                </button>
               </div>
             )}
             {error && (
@@ -155,32 +188,46 @@ const AttendancePage = () => {
               </div>
             )}
 
+            {isLocked && !message && (
+              <div className="bg-blue-50 border border-blue-200 text-blue-700 text-sm px-4 py-3 rounded-lg mb-4 flex items-center justify-between">
+                <span>Attendance already marked for <strong>{selectedDate}</strong></span>
+                <button
+                  onClick={handleMarkAgain}
+                  className="text-xs bg-blue-600 text-white px-3 py-1 rounded-lg hover:bg-blue-700 transition-colors ml-4"
+                >
+                  Mark again
+                </button>
+              </div>
+            )}
+
             {students.length === 0 ? (
               <div className="text-center py-12 text-gray-400">
                 <p>No students in this batch yet</p>
               </div>
             ) : (
-              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+              <div className={`bg-white border rounded-xl overflow-hidden ${isLocked ? 'border-blue-200 opacity-75 pointer-events-none' : 'border-gray-200'}`}>
                 <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gray-50">
                   <div className="flex items-center gap-4 text-sm">
                     <span className="text-gray-600">{students.length} students</span>
                     <span className="text-emerald-600 font-medium">{presentCount} present</span>
                     <span className="text-red-500 font-medium">{absentCount} absent</span>
                   </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => toggleAll('present')}
-                      className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1.5 rounded-lg hover:bg-emerald-100 transition-colors"
-                    >
-                      All present
-                    </button>
-                    <button
-                      onClick={() => toggleAll('absent')}
-                      className="text-xs bg-red-50 text-red-600 border border-red-200 px-3 py-1.5 rounded-lg hover:bg-red-100 transition-colors"
-                    >
-                      All absent
-                    </button>
-                  </div>
+                  {!isLocked && (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => toggleAll('present')}
+                        className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1.5 rounded-lg hover:bg-emerald-100 transition-colors"
+                      >
+                        All present
+                      </button>
+                      <button
+                        onClick={() => toggleAll('absent')}
+                        className="text-xs bg-red-50 text-red-600 border border-red-200 px-3 py-1.5 rounded-lg hover:bg-red-100 transition-colors"
+                      >
+                        All absent
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {students.map((student, i) => (
@@ -203,7 +250,7 @@ const AttendancePage = () => {
                         className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                           attendance[student._id] === 'present'
                             ? 'bg-emerald-500 text-white'
-                            : 'bg-gray-100 text-gray-500 hover:bg-emerald-50 hover:text-emerald-600'
+                            : 'bg-gray-100 text-gray-500'
                         }`}
                       >
                         Present
@@ -213,7 +260,7 @@ const AttendancePage = () => {
                         className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                           attendance[student._id] === 'absent'
                             ? 'bg-red-400 text-white'
-                            : 'bg-gray-100 text-gray-500 hover:bg-red-50 hover:text-red-500'
+                            : 'bg-gray-100 text-gray-500'
                         }`}
                       >
                         Absent
@@ -222,15 +269,17 @@ const AttendancePage = () => {
                   </div>
                 ))}
 
-                <div className="px-5 py-4 border-t border-gray-100 bg-gray-50 flex justify-end">
-                  <button
-                    onClick={handleSave}
-                    disabled={saving}
-                    className="bg-blue-700 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-blue-800 transition-colors disabled:opacity-50"
-                  >
-                    {saving ? 'Saving...' : 'Save attendance'}
-                  </button>
-                </div>
+                {!isLocked && (
+                  <div className="px-5 py-4 border-t border-gray-100 bg-gray-50 flex justify-end">
+                    <button
+                      onClick={handleSave}
+                      disabled={saving}
+                      className="bg-blue-700 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-blue-800 transition-colors disabled:opacity-50"
+                    >
+                      {saving ? 'Saving...' : 'Save attendance'}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -281,6 +330,13 @@ const AttendancePage = () => {
                 </tbody>
               </table>
             )}
+          </div>
+        )}
+
+        {selectedBatch && tab === 'chart' && (
+          <div className="bg-white border border-gray-200 rounded-xl p-6">
+            <h2 className="font-semibold text-gray-800 mb-4">Daily attendance — all time</h2>
+            <AttendanceChart data={datewiseData} />
           </div>
         )}
       </div>

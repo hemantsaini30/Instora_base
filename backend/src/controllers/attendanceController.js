@@ -74,9 +74,31 @@ const getBatchAttendanceSummary = async (req, res, next) => {
   }
 };
 
+const getDatewiseAttendance = async (req, res, next) => {
+  try {
+    const { batchId } = req.params;
+    const records = await Attendance.find({ batchId }).sort({ date: 1 });
+
+    const dateMap = {};
+    records.forEach(r => {
+      if (!dateMap[r.date]) {
+        dateMap[r.date] = { date: r.date, present: 0, absent: 0 };
+      }
+      if (r.status === 'present') dateMap[r.date].present++;
+      else dateMap[r.date].absent++;
+    });
+
+    const data = Object.values(dateMap).sort((a, b) => new Date(a.date) - new Date(b.date));
+    res.json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   markAttendance,
   getAttendanceByBatchAndDate,
   getAttendanceByStudent,
+  getDatewiseAttendance,
   getBatchAttendanceSummary,
 };
