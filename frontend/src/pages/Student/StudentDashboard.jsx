@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext'
 import { getMyProfile } from '../../services/studentApi'
 import { getAttendanceByStudent } from '../../services/attendanceApi'
 import { getMyFees } from '../../services/feeApi'
+import { getMyPayments } from '../../services/paymentApi'
 
 const StudentDashboard = () => {
   const { user, logout } = useAuth()
@@ -13,6 +14,7 @@ const StudentDashboard = () => {
   const [fees, setFees] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [myPayments, setMyPayments] = useState([])
 
   useEffect(() => {
     const fetchData = async () => {
@@ -28,6 +30,8 @@ const StudentDashboard = () => {
         setAttendance(attRes.data.data)
         
         setFees(feeRes.data.data)
+        const payRes = await getMyPayments()
+        setMyPayments(payRes.data.data)
       } catch {
         setError('Failed to load your profile data')
       } finally {
@@ -195,6 +199,33 @@ const StudentDashboard = () => {
             </div>
           </div>
         )}
+
+        {myPayments.length > 0 && (
+            <div className="bg-white border border-gray-200 rounded-xl p-6 mt-6">
+              <h2 className="font-semibold text-gray-800 mb-4">Payment receipts</h2>
+              <div className="flex flex-col gap-2">
+                {myPayments.map((p) => (
+                  <div key={p._id} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+                    <div>
+                      <p className="font-mono text-xs bg-gray-100 px-2 py-1 rounded text-gray-700 inline-block">
+                        {p.receiptNumber}
+                      </p>
+                      <p className="text-xs text-gray-400 mt-1">
+                        {p.feeId ? `${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][p.feeId.month - 1]} ${p.feeId.year}` : ''}
+                        {' · '}{p.paymentMethod}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-bold text-emerald-600">₹{Number(p.amount).toLocaleString('en-IN')}</p>
+                      <p className="text-xs text-gray-400">
+                        {new Date(p.paymentDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
       </div>
     </div>
   )
