@@ -40,6 +40,14 @@ const getAttendanceByBatchAndDate = async (req, res, next) => {
 const getAttendanceByStudent = async (req, res, next) => {
   try {
     const { studentId } = req.params;
+
+    if (req.user.role === 'student') {
+      const student = await Student.findOne({ userId: req.user.id });
+      if (!student || student._id.toString() !== studentId) {
+        return res.status(403).json({ success: false, message: 'Access denied' });
+      }
+    }
+
     const records = await Attendance.find({ studentId }).sort({ date: -1 });
     const total = records.length;
     const present = records.filter(r => r.status === 'present').length;

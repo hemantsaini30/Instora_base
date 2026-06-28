@@ -1,5 +1,7 @@
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const errorHandler = require('./middlewares/errorHandler');
 
 const authRoutes = require('./routes/authRoutes');
@@ -14,8 +16,27 @@ const teacherRoutes = require('./routes/teacherRoutes');
 
 const app = express();
 
+app.use(helmet());
 app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173' }));
 app.use(express.json());
+
+const noSQLInjection = (req, res, next) => {
+  const body = JSON.stringify(req.body || {});
+  if (body.includes('$') || body.includes('\x00')) {
+    return res.status(400).json({ success: false, message: 'Invalid input' });
+  }
+  next();
+};
+app.use(noSQLInjection);
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { success: false, message: 'Too many login attempts. Try again after 15 minutes.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/api/auth/login', loginLimiter);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
