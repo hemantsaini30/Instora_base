@@ -1,10 +1,11 @@
 const Student = require('../models/Student');
 const User = require('../models/User');
+const Fee = require('../models/Fee');
 const bcrypt = require('bcryptjs');
 
 const createStudent = async (req, res, next) => {
   try {
-    const { fullName, username, password, parentPhone, batchId } = req.body;
+    const { fullName, username, password, parentPhone, batchId, monthlyFee, initialFeeStatus } = req.body;
     if (!fullName || !username || !password || !parentPhone || !batchId) {
       return res.status(400).json({ success: false, message: 'All fields are required' });
     }
@@ -12,10 +13,42 @@ const createStudent = async (req, res, next) => {
     if (existingUser) {
       return res.status(400).json({ success: false, message: 'Username already taken' });
     }
+
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = await User.create({ username, password: hashedPassword, role: 'student' });
-    const student = await Student.create({ userId: user._id, fullName, parentPhone, batchId });
-    const populated = await Student.findById(student._id).populate('userId', 'username').populate('batchId', 'name course');
+
+    const joiningDate = new Date();
+    const feeAmount = Number(monthlyFee) || 0;
+    const feeStatus = initialFeeStatus === 'paid' ? 'paid' : 'pending';
+
+    const student = await Student.create({
+      userId: user._id,
+      fullName,
+      parentPhone,
+      batchId,
+      monthlyFee: feeAmount,
+      feeStatus: feeAmount > 0 ? feeStatus : 'pending',
+      joiningDate,
+    });
+
+    if (feeAmount > 0) {
+      const endDate = new Date(joiningDate);
+      endDate.setMonth(endDate.getMonth() + 1);
+      await Fee.create({
+        studentId: student._id,
+        batchId,
+        amount: feeAmount,
+        paidAmount: feeStatus === 'paid' ? feeAmount : 0,
+        startDate: joiningDate,
+        endDate,
+        status: feeStatus,
+      });
+    }
+
+    const populated = await Student.findById(student._id)
+      .populate('userId', 'username')
+      .populate('batchId', 'name course');
+
     res.status(201).json({ success: true, message: 'Student created', data: populated });
   } catch (error) {
     next(error);
@@ -55,6 +88,7 @@ const deleteStudent = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Student not found' });
     }
     await User.findByIdAndDelete(student.userId);
+    await Fee.deleteMany({ studentId: student._id });
     res.json({ success: true, message: 'Student deleted' });
   } catch (error) {
     next(error);

@@ -5,6 +5,7 @@ const studentSchema = new mongoose.Schema({
   fullName: { type: String, required: true, trim: true },
   parentPhone: { type: String, required: true },
   batchId: { type: mongoose.Schema.Types.ObjectId, ref: 'Batch', required: true },
+  monthlyFee: { type: Number, default: 0 },
   feeStatus: { type: String, enum: ['paid', 'pending', 'partial'], default: 'pending' },
   joiningDate: { type: Date, default: Date.now },
 }, { timestamps: true });

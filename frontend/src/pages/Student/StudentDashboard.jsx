@@ -183,7 +183,7 @@ const StudentDashboard = () => {
                     <p className="text-sm font-medium text-gray-900">
                       ₹{Number(fee.amount).toLocaleString('en-IN')}
                     </p>
-                    <p className="text-xs text-gray-400">Due: {fee.dueDate}</p>
+                    <p className="text-xs text-gray-400">{fee.period}</p>
                     {fee.note && <p className="text-xs text-gray-400">{fee.note}</p>}
                   </div>
                   <div className="text-right">

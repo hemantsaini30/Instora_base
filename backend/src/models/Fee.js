@@ -5,13 +5,10 @@ const feeSchema = new mongoose.Schema({
   batchId: { type: mongoose.Schema.Types.ObjectId, ref: 'Batch', required: true },
   amount: { type: Number, required: true },
   paidAmount: { type: Number, default: 0 },
-  month: { type: Number, required: true },
-  year: { type: Number, required: true },
+  startDate: { type: Date, required: true },
+  endDate: { type: Date, required: true },
   status: { type: String, enum: ['paid', 'pending', 'partial'], default: 'pending' },
-  generatedDate: { type: Date, default: Date.now },
   note: { type: String, default: '' },
 }, { timestamps: true });
-
-feeSchema.index({ studentId: 1, month: 1, year: 1 }, { unique: true });
 
 module.exports = mongoose.model('Fee', feeSchema);

@@ -12,7 +12,8 @@ const StudentsPage = () => {
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
   const [form, setForm] = useState({
-    fullName: '', username: '', password: '', parentPhone: '', batchId: ''
+    fullName: '', username: '', password: '', parentPhone: '', batchId: '',
+    monthlyFee: '', initialFeeStatus: 'unpaid'
   })
 
   const fetchAll = async () => {
@@ -35,7 +36,7 @@ const StudentsPage = () => {
     setError('')
     try {
       await createStudent(form)
-      setForm({ fullName: '', username: '', password: '', parentPhone: '', batchId: '' })
+      setForm({ fullName: '', username: '', password: '', parentPhone: '', batchId: '', monthlyFee: '', initialFeeStatus: 'unpaid' })
       setShowForm(false)
       fetchAll()
     } catch (err) {
@@ -141,6 +142,44 @@ const StudentsPage = () => {
                   />
                 </div>
                 <div className="flex flex-col gap-1 col-span-2">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-sm font-medium text-gray-700">Monthly fee (₹)</label>
+                    <input
+                      type="number"
+                      value={form.monthlyFee}
+                      onChange={(e) => setForm({ ...form, monthlyFee: e.target.value })}
+                      placeholder="e.g. 3000"
+                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label className="text-sm font-medium text-gray-700">First month fee status</label>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setForm({ ...form, initialFeeStatus: 'unpaid' })}
+                        className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                          form.initialFeeStatus === 'unpaid'
+                            ? 'bg-red-50 border-red-300 text-red-600'
+                            : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+                        }`}
+                      >
+                        Unpaid
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setForm({ ...form, initialFeeStatus: 'paid' })}
+                        className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                          form.initialFeeStatus === 'paid'
+                            ? 'bg-emerald-50 border-emerald-300 text-emerald-600'
+                            : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+                        }`}
+                      >
+                        Paid
+                      </button>
+                    </div>
+                  </div>
                   <label className="text-sm font-medium text-gray-700">Assign batch</label>
                   <select
                     value={form.batchId}
