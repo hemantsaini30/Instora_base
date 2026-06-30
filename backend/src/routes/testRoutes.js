@@ -7,6 +7,7 @@ const {
   publishTest, closeTest, deleteTest,
   getAvailableTests, startTest, submitTest, getTestResult,
   getTestAnalytics, getAllTestsAdmin, getAnalyticsOverview,
+  getTestLeaderboard
 } = require('../controllers/testController');
 const { generateQuestions } = require('../controllers/aiController');
 
@@ -29,5 +30,6 @@ router.get('/:id/analytics', protect, authorize('admin', 'teacher'), getTestAnal
 router.post('/:id/start', protect, authorize('student'), startTest);
 router.post('/:id/submit', protect, authorize('student'), submitTest);
 router.get('/:id/result', protect, authorize('student'), getTestResult);
+router.get('/:id/leaderboard', protect, authorize('student'), getTestLeaderboard);
 
 module.exports = router;

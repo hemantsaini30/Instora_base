@@ -19,6 +19,7 @@ import StudentDashboard from '../pages/Student/StudentDashboard'
 import StudentTestsPage from '../pages/Student/StudentTestsPage'
 import ExamPage from '../pages/Student/ExamPage'
 import TestResultPage from '../pages/Student/TestResultPage'
+import TestLeaderboardPage from '../pages/Student/TestLeaderboardPage'
 
 const guard = (roles, element) => <ProtectedRoute allowedRoles={roles}>{element}</ProtectedRoute>
 
@@ -47,6 +48,7 @@ const AppRoutes = () => (
       <Route path="/student/tests" element={guard(['student'], <StudentTestsPage />)} />
       <Route path="/student/tests/:id/exam" element={guard(['student'], <ExamPage />)} />
       <Route path="/student/tests/:id/result" element={guard(['student'], <TestResultPage />)} />
+      <Route path="/student/tests/:id/leaderboard" element={guard(['student'], <TestLeaderboardPage />)} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

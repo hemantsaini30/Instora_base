@@ -18,3 +18,4 @@ export const submitTest = (id, data) => API.post(`/api/tests/${id}/submit`, data
 export const getTestResult = (id) => API.get(`/api/tests/${id}/result`)
 export const getAllTestsAdmin = () => API.get('/api/tests')
 export const getAnalyticsOverview = () => API.get('/api/tests/analytics/overview')
+export const getTestLeaderboard = (id) => API.get(`/api/tests/${id}/leaderboard`)

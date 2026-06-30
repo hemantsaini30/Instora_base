@@ -468,10 +468,66 @@ const getAnalyticsOverview = async (req, res, next) => {
   } catch (error) { next(error); }
 };
 
+const getTestLeaderboard = async (req, res, next) => {
+  try {
+    const student = await Student.findOne({ userId: req.user.id });
+    if (!student) return res.status(404).json({ success: false, message: 'Student profile not found' });
+
+    const test = await Test.findById(req.params.id);
+    if (!test) return res.status(404).json({ success: false, message: 'Test not found' });
+    if (test.status !== 'closed') {
+      return res.status(400).json({ success: false, message: 'Leaderboard is available once the teacher closes the test' });
+    }
+
+    const mySubmission = await TestSubmission.findOne({ testId: test._id, studentId: student._id });
+    if (!mySubmission || mySubmission.status === 'in_progress') {
+      return res.status(403).json({ success: false, message: 'You must complete this test to view the leaderboard' });
+    }
+
+    const submissions = await TestSubmission.find({ testId: test._id, status: { $ne: 'in_progress' } })
+      .populate('studentId', 'fullName')
+      .sort({ score: -1, timeTaken: 1 });
+
+    const maskName = (fullName) => {
+      const parts = fullName.trim().split(' ');
+      const first = parts[0];
+      const lastInitial = parts.length > 1 ? `${parts[parts.length - 1][0]}.` : '';
+      return lastInitial ? `${first} ${lastInitial}` : first;
+    };
+
+    const leaderboard = submissions.map((sub, i) => ({
+      rank: i + 1,
+      displayName: maskName(sub.studentId.fullName),
+      score: sub.score,
+      totalMarks: sub.totalMarks,
+      percentage: sub.percentage,
+      timeTaken: sub.timeTaken,
+      isYou: sub.studentId._id.toString() === student._id.toString(),
+    }));
+
+    const avgPercentage = submissions.length === 0 ? 0 :
+      Math.round(submissions.reduce((s, sub) => s + sub.percentage, 0) / submissions.length);
+
+    res.json({
+      success: true,
+      data: {
+        test: { title: test.title, subject: test.subject, totalMarks: test.totalMarks },
+        leaderboard,
+        stats: {
+          totalParticipants: submissions.length,
+          averagePercentage: avgPercentage,
+          topScore: submissions[0]?.score || 0,
+          yourRank: leaderboard.find(l => l.isYou)?.rank || null,
+        },
+      },
+    });
+  } catch (error) { next(error); }
+};
+
 module.exports = {
   createTest, getMyTests, getTestById, updateTest,
   addQuestion, addBulkQuestions, deleteQuestion,
-  publishTest, closeTest, deleteTest,
+  publishTest, closeTest, deleteTest, getTestLeaderboard,
   getAvailableTests, startTest, submitTest, getTestResult,
   getTestAnalytics, getAllTestsAdmin, getAnalyticsOverview,
 };
