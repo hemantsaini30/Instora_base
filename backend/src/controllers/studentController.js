@@ -2,6 +2,7 @@ const Student = require('../models/Student');
 const User = require('../models/User');
 const Fee = require('../models/Fee');
 const bcrypt = require('bcryptjs');
+const Payment = require('../models/Payment');
 
 const createStudent = async (req, res, next) => {
   try {
@@ -31,18 +32,37 @@ const createStudent = async (req, res, next) => {
       joiningDate,
     });
 
-    if (feeAmount > 0) {
-      const endDate = new Date(joiningDate);
-      endDate.setMonth(endDate.getMonth() + 1);
-      await Fee.create({
-        studentId: student._id,
-        batchId,
-        amount: feeAmount,
-        paidAmount: feeStatus === 'paid' ? feeAmount : 0,
-        startDate: joiningDate,
-        endDate,
-        status: feeStatus,
-      });
+   if (feeAmount > 0) {
+  const endDate = new Date(joiningDate);
+  endDate.setMonth(endDate.getMonth() + 1);
+  const fee = await Fee.create({
+    studentId: student._id,
+    batchId,
+    amount: feeAmount,
+    paidAmount: feeStatus === 'paid' ? feeAmount : 0,
+    startDate: joiningDate,
+    endDate,
+    status: feeStatus,
+  });
+
+  if (feeStatus === 'paid') {
+        const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        let receiptNumber = `RCP-${dateStr}-${Math.floor(1000 + Math.random() * 9000)}`;
+        let exists = await Payment.findOne({ receiptNumber });
+        while (exists) {
+          receiptNumber = `RCP-${dateStr}-${Math.floor(1000 + Math.random() * 9000)}`;
+          exists = await Payment.findOne({ receiptNumber });
+        }
+        await Payment.create({
+          studentId: student._id,
+          feeId: fee._id,
+          amount: feeAmount,
+          receiptNumber,
+          paymentMethod: 'cash',
+          note: 'Initial payment at admission',
+          recordedBy: req.user.id,
+        });
+      }
     }
 
     const populated = await Student.findById(student._id)
