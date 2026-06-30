@@ -14,13 +14,14 @@ const AdminLayout = ({ children }) => {
   }
 
   const navItems = [
-    { label: 'Dashboard', path: '/admin/dashboard', icon: '⊞' },
-    { label: 'Students', path: '/admin/students', icon: '👤' },
-    { label: 'Teachers', path: '/admin/teachers', icon: '🎓' },
-    { label: 'Batches', path: '/admin/batches', icon: '📚' },
-    { label: 'Attendance', path: '/admin/attendance', icon: '✅' },
-    { label: 'Fees', path: '/admin/fees', icon: '₹' },
-    { label: 'Inquiries', path: '/admin/inquiries', icon: '📋' },
+  { label: 'Dashboard', path: '/admin/dashboard', icon: '⊞' },
+  { label: 'Students', path: '/admin/students', icon: '👤' },
+  { label: 'Teachers', path: '/admin/teachers', icon: '🎓' },
+  { label: 'Batches', path: '/admin/batches', icon: '📚' },
+  { label: 'Attendance', path: '/admin/attendance', icon: '✅' },
+  { label: 'Fees', path: '/admin/fees', icon: '₹' },
+  { label: 'Inquiries', path: '/admin/inquiries', icon: '📋' },
+  { label: 'Test Analytics', path: '/admin/tests', icon: '📊' },
   ]
 
   const SidebarContent = () => (

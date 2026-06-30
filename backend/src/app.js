@@ -13,6 +13,7 @@ const attendanceRoutes = require('./routes/attendanceRoutes');
 const feeRoutes = require('./routes/feeRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const teacherRoutes = require('./routes/teacherRoutes');
+const testRoutes = require('./routes/testRoutes');
 
 const app = express();
 
@@ -47,6 +48,7 @@ app.use('/api/attendance', attendanceRoutes);
 app.use('/api/fees', feeRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/teachers', teacherRoutes);
+app.use('/api/tests', testRoutes);
 
 app.get('/', (req, res) => res.json({ message: 'Instora API is running ✅' }));
 

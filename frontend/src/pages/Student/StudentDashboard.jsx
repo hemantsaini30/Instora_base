@@ -86,14 +86,16 @@ const StudentDashboard = () => {
         <span className="text-xl font-bold text-blue-800">
           Inst<span className="text-emerald-600">ora</span>
         </span>
+        <nav className="flex items-center gap-1">
+          <span className="text-sm px-3 py-1.5 rounded-lg bg-blue-100 text-blue-700 font-medium">Dashboard</span>
+          <button onClick={() => navigate('/student/tests')}
+            className="text-sm px-3 py-1.5 rounded-lg text-gray-500 hover:bg-gray-100">
+            Tests
+          </button>
+        </nav>
         <div className="flex items-center gap-4">
           <span className="text-sm text-gray-500">{user?.username}</span>
-          <button
-            onClick={handleLogout}
-            className="text-sm text-gray-400 hover:text-gray-600 transition-colors"
-          >
-            Sign out
-          </button>
+          <button onClick={handleLogout} className="text-sm text-gray-400 hover:text-gray-600 transition-colors">Sign out</button>
         </div>
       </header>
 
