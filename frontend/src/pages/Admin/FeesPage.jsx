@@ -4,6 +4,7 @@ import { getFeeSummary, getStudentFeeProfile, addNextMonthFee, updateFeePayment,
 import { getAllPayments } from '../../services/paymentApi'
 import { getAllBatches } from '../../services/batchApi'
 import { getAllStudents } from '../../services/studentApi'
+import { getOnlinePayments } from '../../services/razorpayApi'
 
 const fmt = (n) => `₹${Number(n || 0).toLocaleString('en-IN')}`
 
@@ -26,6 +27,8 @@ const FeesPage = () => {
   const [batches, setBatches] = useState([])
   const [students, setStudents] = useState([])
   const [payments, setPayments] = useState([])
+  const [onlinePayments, setOnlinePayments] = useState([])
+  const [onlineTotal, setOnlineTotal] = useState(0)
   const [summary, setSummary] = useState(null)
   const [selectedBatch, setSelectedBatch] = useState('')
   const [loading, setLoading] = useState(true)
@@ -41,16 +44,19 @@ const FeesPage = () => {
 
   const fetchAll = async () => {
     try {
-      const [batchRes, studRes, sumRes, payRes] = await Promise.all([
+      const [batchRes, studRes, sumRes, payRes,onlineRes] = await Promise.all([
         getAllBatches(),
         getAllStudents(),
         getFeeSummary(),
         getAllPayments(),
+        getOnlinePayments(),
       ])
       setBatches(batchRes.data.data)
       setStudents(studRes.data.data)
       setSummary(sumRes.data.data)
       setPayments(payRes.data.data)
+      setOnlinePayments(onlineRes.data.data)
+      setOnlineTotal(onlineRes.data.totalOnlineCollection)
       if (!selectedBatch && batchRes.data.data.length > 0) {
         setSelectedBatch(batchRes.data.data[0]._id)
       }
@@ -187,13 +193,11 @@ const FeesPage = () => {
           </div>
         )}
 
-        <div className="flex gap-1 mb-6 bg-gray-100 p-1 rounded-lg w-fit">
-          {['students', 'transactions'].map(t => (
+        <div className="flex gap-1 mb-5 bg-gray-100 p-1 rounded-lg w-fit">
+          {['students', 'transactions', 'online'].map(t => (
             <button key={t} onClick={() => setTab(t)}
-              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                tab === t ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-              }`}>
-              {t === 'students' ? 'Students' : 'All transactions'}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${tab === t ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+              {t === 'students' ? 'Students' : t === 'transactions' ? 'All transactions' : '💳 Online payments'}
             </button>
           ))}
         </div>
@@ -298,6 +302,60 @@ const FeesPage = () => {
                           {new Date(p.paymentDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                         </td>
                         <td className="px-5 py-4 text-gray-400 text-xs">{p.recordedBy?.username}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab === 'online' && (
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <div className="bg-purple-50 border border-purple-200 rounded-xl px-4 py-3">
+                <p className="text-xs text-purple-600">Total collected online</p>
+                <p className="text-xl font-bold text-purple-700">{fmt(onlineTotal)}</p>
+              </div>
+              <div className="text-xs text-gray-400 bg-white border border-gray-200 rounded-lg px-3 py-2">
+                🔒 Online payments are verified by Razorpay and permanent
+              </div>
+            </div>
+            {onlinePayments.length === 0 ? (
+              <div className="text-center py-16 text-gray-400">
+                <p className="text-lg mb-1">No online payments yet</p>
+                <p className="text-sm">Payments made by students via Razorpay will appear here</p>
+              </div>
+            ) : (
+              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-200">
+                      <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase">Razorpay Order ID</th>
+                      <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase">Student</th>
+                      <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase">Batch</th>
+                      <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase">Fee period</th>
+                      <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase">Amount</th>
+                      <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase">Paid on</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {onlinePayments.map((p, i) => (
+                      <tr key={p._id} className={`border-b border-gray-100 hover:bg-gray-50 ${i === onlinePayments.length - 1 ? 'border-b-0' : ''}`}>
+                        <td className="px-5 py-4">
+                          <span className="font-mono text-xs bg-purple-50 text-purple-700 px-2 py-1 rounded">{p.orderId}</span>
+                        </td>
+                        <td className="px-5 py-4">
+                          <p className="font-medium text-gray-900">{p.studentName}</p>
+                          <p className="text-xs text-gray-400">{p.username}</p>
+                        </td>
+                        <td className="px-5 py-4 text-gray-500 text-xs">{p.batchName}</td>
+                        <td className="px-5 py-4 text-gray-700 font-medium">{p.period}</td>
+                        <td className="px-5 py-4 font-bold text-emerald-600">{fmt(p.amountInRupees)}</td>
+                        <td className="px-5 py-4 text-gray-400 text-xs">
+                          {new Date(p.paidAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
