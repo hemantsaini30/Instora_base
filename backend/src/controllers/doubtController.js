@@ -33,6 +33,12 @@ const uploadFile = async (file) => {
   return { fileUrl: result.secure_url, filePublicId: result.public_id, fileMimeType: file.mimetype };
 };
 
+const makeTitle = (text, hasFile) => {
+  if (text?.trim()) return text.trim().slice(0, 60) + (text.trim().length > 60 ? '…' : '');
+  if (hasFile) return '📷 Image doubt';
+  return 'Doubt';
+};
+
 // ─── student: list available teachers ───────────────────────
 
 const getAvailableTeachers = async (req, res, next) => {
@@ -67,12 +73,12 @@ const getAvailableTeachers = async (req, res, next) => {
 };
 
 // ─── student: create session(s) + initial message ───────────
+// Always creates a NEW session — each doubt is its own thread
 
 const createSessions = async (req, res, next) => {
   try {
     let { teacherIds, batchId, text, type } = req.body;
 
-    // FormData sends repeated fields as string when count=1, array when count>1
     if (typeof teacherIds === 'string') teacherIds = [teacherIds];
     if (!Array.isArray(teacherIds) || !teacherIds.length)
       return res.status(400).json({ success: false, message: 'Select at least one teacher' });
@@ -85,13 +91,18 @@ const createSessions = async (req, res, next) => {
     if (!student) return res.status(404).json({ success: false, message: 'Student profile not found' });
 
     const { fileUrl, filePublicId, fileMimeType } = await uploadFile(req.file);
+    const title = makeTitle(text, !!req.file);
 
     const sessionIds = [];
     for (const teacherId of teacherIds) {
-      let session = await DoubtSession.findOne({ studentId: student._id, teacherId });
-      if (!session) {
-        session = await DoubtSession.create({ studentId: student._id, teacherId, batchId });
-      }
+      // Always create a fresh session — no findOne
+      const session = await DoubtSession.create({
+        studentId: student._id,
+        teacherId,
+        batchId,
+        title,
+      });
+
       await DoubtMessage.create({
         sessionId: session._id,
         senderId: req.user._id,
@@ -102,8 +113,8 @@ const createSessions = async (req, res, next) => {
         filePublicId,
         fileMimeType,
       });
+
       session.lastMessageAt = new Date();
-      session.status = 'open';
       await session.save();
       sessionIds.push(session._id);
     }

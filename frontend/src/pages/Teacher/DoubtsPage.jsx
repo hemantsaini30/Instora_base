@@ -5,24 +5,29 @@ import {
   toggleSave, resolveSession,
 } from '../../services/doubtApi'
 
-const MessageBubble = ({ msg }) => {
+const timeAgo = (d) => {
+  const diff = Date.now() - new Date(d)
+  if (diff < 60000) return 'just now'
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`
+  return new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+}
+
+const MessageBubble = ({ msg, onImageClick }) => {
   const isMe = msg.senderRole === 'teacher'
-
-  const timeAgo = (d) => {
-    const diff = Date.now() - new Date(d)
-    if (diff < 60000) return 'just now'
-    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`
-    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`
-    return new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
-  }
-
   return (
     <div className={`flex ${isMe ? 'justify-end' : 'justify-start'} mb-3`}>
       <div className={`max-w-xs lg:max-w-sm rounded-2xl px-4 py-2.5 shadow-sm ${
         isMe ? 'bg-purple-600 text-white rounded-br-sm' : 'bg-white border border-gray-200 text-gray-800 rounded-bl-sm'
       }`}>
         {msg.type === 'image' && msg.fileUrl && (
-          <img src={msg.fileUrl} alt="attachment" className="rounded-xl mb-1.5 max-w-full" style={{ maxHeight: 200 }} />
+          <img
+            src={msg.fileUrl}
+            alt="attachment"
+            onClick={() => onImageClick(msg.fileUrl)}
+            className="rounded-xl mb-1.5 max-w-full cursor-zoom-in hover:opacity-90 transition-opacity"
+            style={{ maxHeight: 200, maxWidth: 240 }}
+          />
         )}
         {msg.type === 'voice' && msg.fileUrl && (
           <audio controls src={msg.fileUrl} className="w-52 mb-1" />
@@ -35,20 +40,22 @@ const MessageBubble = ({ msg }) => {
 }
 
 const TeacherDoubtsPage = () => {
-  const [grouped, setGrouped]               = useState([])
-  const [activeBatch, setActiveBatch]       = useState(null)
-  const [activeSession, setActiveSession]   = useState(null)
-  const [messages, setMessages]             = useState([])
+  const [grouped, setGrouped]             = useState([])
+  const [activeBatch, setActiveBatch]     = useState(null)
+  const [activeSession, setActiveSession] = useState(null)
+  const [messages, setMessages]           = useState([])
 
-  const [replyText, setReplyText]             = useState('')
-  const [replyImageFile, setReplyImageFile]   = useState(null)
-  const [replyImgPrev, setReplyImgPrev]       = useState(null)
-  const [audioBlob, setAudioBlob]             = useState(null)
-  const [recording, setRecording]             = useState(false)
-  const [sendingReply, setSendingReply]       = useState(false)
+  const [replyText, setReplyText]           = useState('')
+  const [replyImageFile, setReplyImageFile] = useState(null)
+  const [replyImgPrev, setReplyImgPrev]     = useState(null)
+  const [audioBlob, setAudioBlob]           = useState(null)
+  const [recording, setRecording]           = useState(false)
+  const [sendingReply, setSendingReply]     = useState(false)
 
-  const [loading, setLoading]     = useState(true)
-  const [error, setError]         = useState('')
+  const [lightboxSrc, setLightboxSrc]       = useState(null)
+
+  const [loading, setLoading]       = useState(true)
+  const [error, setError]           = useState('')
   const [mobileView, setMobileView] = useState('sessions')
 
   const pollingRef   = useRef(null)
@@ -78,7 +85,13 @@ const TeacherDoubtsPage = () => {
 
   useEffect(() => { msgEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
-  const allSessions = grouped.flatMap(g => g.sessions.map(s => ({ ...s, _batchObj: g.batch })))
+  useEffect(() => {
+    const handler = (e) => { if (e.key === 'Escape') setLightboxSrc(null) }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
+
+  const allSessions = grouped.flatMap(g => g.sessions)
   const filteredSessions = activeBatch
     ? allSessions.filter(s => s.batchId?._id?.toString() === activeBatch)
     : allSessions
@@ -118,16 +131,13 @@ const TeacherDoubtsPage = () => {
     try {
       const fd = new FormData()
       if (audioBlob) {
-        fd.append('type', 'voice')
-        fd.append('text', '')
+        fd.append('type', 'voice'); fd.append('text', '')
         fd.append('file', audioBlob, 'voice-note.webm')
       } else if (replyImageFile) {
-        fd.append('type', 'image')
-        fd.append('text', replyText.trim())
+        fd.append('type', 'image'); fd.append('text', replyText.trim())
         fd.append('file', replyImageFile)
       } else {
-        fd.append('type', 'text')
-        fd.append('text', replyText.trim())
+        fd.append('type', 'text'); fd.append('text', replyText.trim())
       }
       await apiSend(activeSession._id, fd)
       setReplyText(''); setReplyImageFile(null); setReplyImgPrev(null); setAudioBlob(null)
@@ -154,16 +164,28 @@ const TeacherDoubtsPage = () => {
     } catch { setError('Failed to resolve') }
   }
 
-  const timeAgo = (d) => {
-    const diff = Date.now() - new Date(d)
-    if (diff < 60000) return 'just now'
-    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`
-    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`
-    return new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
-  }
-
   return (
     <TeacherLayout>
+
+      {/* Lightbox */}
+      {lightboxSrc && (
+        <div
+          onClick={() => setLightboxSrc(null)}
+          className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-[100] cursor-zoom-out p-4"
+        >
+          <img
+            src={lightboxSrc}
+            alt="full size"
+            className="max-w-full max-h-full object-contain rounded-xl shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          />
+          <button
+            onClick={() => setLightboxSrc(null)}
+            className="absolute top-4 right-4 text-white text-3xl leading-none hover:text-gray-300 transition-colors"
+          >×</button>
+        </div>
+      )}
+
       <div className="flex h-[calc(100vh-53px)] md:h-screen overflow-hidden">
 
         {/* Left: session list */}
@@ -196,7 +218,7 @@ const TeacherDoubtsPage = () => {
             ) : filteredSessions.length === 0 ? (
               <div className="text-center py-12 px-4">
                 <p className="text-3xl mb-2">💬</p>
-                <p className="text-sm text-gray-400">No doubts yet in this batch</p>
+                <p className="text-sm text-gray-400">No doubts yet</p>
               </div>
             ) : filteredSessions.map(s => (
               <div key={s._id} onClick={() => openSession(s)}
@@ -206,16 +228,19 @@ const TeacherDoubtsPage = () => {
                   {(s.studentId?.fullName || '?').charAt(0).toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <p className="font-medium text-gray-900 text-sm truncate">{s.studentId?.fullName}</p>
-                    <span className="text-xs text-gray-400 ml-2 flex-shrink-0">{timeAgo(s.lastMessageAt)}</span>
+                  <div className="flex items-center justify-between gap-2">
+                    {/* Title — the doubt question */}
+                    <p className="font-medium text-gray-900 text-sm truncate">{s.title || 'Doubt'}</p>
+                    <span className="text-xs text-gray-400 flex-shrink-0">{timeAgo(s.lastMessageAt)}</span>
                   </div>
-                  <p className="text-xs text-gray-500">{s.batchId?.name}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {s.studentId?.fullName} · {s.batchId?.name}
+                  </p>
                   <p className="text-xs text-gray-400 truncate mt-0.5">
                     {s.lastMessage?.type === 'image' ? '📷 Image' : s.lastMessage?.type === 'voice' ? '🎤 Voice note' : s.lastMessage?.text || '—'}
                   </p>
                 </div>
-                <div className="flex flex-col gap-1 flex-shrink-0 items-end">
+                <div className="flex flex-col gap-1 flex-shrink-0 items-end pt-0.5">
                   {s.isSavedByTeacher && <span className="text-xs bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full">Saved</span>}
                   {s.status === 'resolved' && <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">Done</span>}
                 </div>
@@ -244,8 +269,8 @@ const TeacherDoubtsPage = () => {
                   {(activeSession.studentId?.fullName || '?').charAt(0).toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-gray-900 text-sm">{activeSession.studentId?.fullName}</p>
-                  <p className="text-xs text-gray-400">{activeSession.batchId?.name}</p>
+                  <p className="font-semibold text-gray-900 text-sm truncate">{activeSession.title || 'Doubt'}</p>
+                  <p className="text-xs text-gray-400">{activeSession.studentId?.fullName} · {activeSession.batchId?.name}</p>
                 </div>
                 <div className="flex items-center gap-2">
                   {activeSession.status === 'resolved' && (
@@ -271,7 +296,7 @@ const TeacherDoubtsPage = () => {
               <div className="flex-1 overflow-y-auto px-4 py-4">
                 {messages.length === 0
                   ? <p className="text-center text-gray-400 text-sm py-8">Loading messages...</p>
-                  : messages.map(m => <MessageBubble key={m._id} msg={m} />)
+                  : messages.map(m => <MessageBubble key={m._id} msg={m} onImageClick={setLightboxSrc} />)
                 }
                 <div ref={msgEndRef} />
               </div>

@@ -7,24 +7,29 @@ import {
   getMessages, sendMessage as apiSend, toggleSave,
 } from '../../services/doubtApi'
 
-const MessageBubble = ({ msg }) => {
+const timeAgo = (d) => {
+  const diff = Date.now() - new Date(d)
+  if (diff < 60000) return 'just now'
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`
+  return new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+}
+
+const MessageBubble = ({ msg, onImageClick }) => {
   const isMe = msg.senderRole === 'student'
-
-  const timeAgo = (d) => {
-    const diff = Date.now() - new Date(d)
-    if (diff < 60000) return 'just now'
-    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`
-    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`
-    return new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
-  }
-
   return (
     <div className={`flex ${isMe ? 'justify-end' : 'justify-start'} mb-3`}>
       <div className={`max-w-xs lg:max-w-sm rounded-2xl px-4 py-2.5 shadow-sm ${
         isMe ? 'bg-purple-600 text-white rounded-br-sm' : 'bg-white border border-gray-200 text-gray-800 rounded-bl-sm'
       }`}>
         {msg.type === 'image' && msg.fileUrl && (
-          <img src={msg.fileUrl} alt="attachment" className="rounded-xl mb-1.5 max-w-full" style={{ maxHeight: 200 }} />
+          <img
+            src={msg.fileUrl}
+            alt="attachment"
+            onClick={() => onImageClick(msg.fileUrl)}
+            className="rounded-xl mb-1.5 max-w-full cursor-zoom-in hover:opacity-90 transition-opacity"
+            style={{ maxHeight: 200, maxWidth: 240 }}
+          />
         )}
         {msg.type === 'voice' && msg.fileUrl && (
           <audio controls src={msg.fileUrl} className="w-52 mb-1" />
@@ -40,19 +45,19 @@ const StudentDoubtsPage = () => {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
 
-  const [sessions, setSessions]           = useState([])
-  const [activeSession, setActiveSession] = useState(null)
-  const [messages, setMessages]           = useState([])
-  const [teachers, setTeachers]           = useState([])
+  const [sessions, setSessions]             = useState([])
+  const [activeSession, setActiveSession]   = useState(null)
+  const [messages, setMessages]             = useState([])
+  const [teachers, setTeachers]             = useState([])
   const [studentBatchId, setStudentBatchId] = useState(null)
 
   // new doubt modal
-  const [showNew, setShowNew]             = useState(false)
-  const [selTeachers, setSelTeachers]     = useState([])
-  const [newText, setNewText]             = useState('')
-  const [newImageFile, setNewImageFile]   = useState(null)
-  const [newImgPrev, setNewImgPrev]       = useState(null)
-  const [sendingDoubt, setSendingDoubt]   = useState(false)
+  const [showNew, setShowNew]               = useState(false)
+  const [selTeachers, setSelTeachers]       = useState([])
+  const [newText, setNewText]               = useState('')
+  const [newImageFile, setNewImageFile]     = useState(null)
+  const [newImgPrev, setNewImgPrev]         = useState(null)
+  const [sendingDoubt, setSendingDoubt]     = useState(false)
 
   // reply
   const [replyText, setReplyText]           = useState('')
@@ -62,8 +67,11 @@ const StudentDoubtsPage = () => {
   const [recording, setRecording]           = useState(false)
   const [sendingReply, setSendingReply]     = useState(false)
 
-  const [loading, setLoading]   = useState(true)
-  const [error, setError]       = useState('')
+  // lightbox
+  const [lightboxSrc, setLightboxSrc]       = useState(null)
+
+  const [loading, setLoading]       = useState(true)
+  const [error, setError]           = useState('')
   const [mobileView, setMobileView] = useState('list')
 
   const pollingRef   = useRef(null)
@@ -106,6 +114,13 @@ const StudentDoubtsPage = () => {
   }, [activeSession, fetchMessages])
 
   useEffect(() => { msgEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
+
+  // Close lightbox on Escape
+  useEffect(() => {
+    const handler = (e) => { if (e.key === 'Escape') setLightboxSrc(null) }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
 
   const openSession = (s) => {
     setActiveSession(s); setMessages([]); setMobileView('chat')
@@ -166,16 +181,13 @@ const StudentDoubtsPage = () => {
     try {
       const fd = new FormData()
       if (audioBlob) {
-        fd.append('type', 'voice')
-        fd.append('text', '')
+        fd.append('type', 'voice'); fd.append('text', '')
         fd.append('file', audioBlob, 'voice-note.webm')
       } else if (replyImageFile) {
-        fd.append('type', 'image')
-        fd.append('text', replyText.trim())
+        fd.append('type', 'image'); fd.append('text', replyText.trim())
         fd.append('file', replyImageFile)
       } else {
-        fd.append('type', 'text')
-        fd.append('text', replyText.trim())
+        fd.append('type', 'text'); fd.append('text', replyText.trim())
       }
       await apiSend(activeSession._id, fd)
       setReplyText(''); setReplyImageFile(null); setReplyImgPrev(null); setAudioBlob(null)
@@ -193,16 +205,29 @@ const StudentDoubtsPage = () => {
     } catch { setError('Failed to update') }
   }
 
-  const timeAgo = (d) => {
-    const diff = Date.now() - new Date(d)
-    if (diff < 60000) return 'just now'
-    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`
-    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`
-    return new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
-  }
-
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
+
+      {/* Lightbox */}
+      {lightboxSrc && (
+        <div
+          onClick={() => setLightboxSrc(null)}
+          className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-[100] cursor-zoom-out p-4"
+        >
+          <img
+            src={lightboxSrc}
+            alt="full size"
+            className="max-w-full max-h-full object-contain rounded-xl shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          />
+          <button
+            onClick={() => setLightboxSrc(null)}
+            className="absolute top-4 right-4 text-white text-3xl leading-none hover:text-gray-300 transition-colors"
+          >×</button>
+        </div>
+      )}
+
+      {/* Header */}
       <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between sticky top-0 z-10 h-16">
         <span className="text-xl font-bold text-blue-800">Inst<span className="text-emerald-600">ora</span></span>
         <nav className="flex items-center gap-1">
@@ -225,7 +250,7 @@ const StudentDoubtsPage = () => {
 
       <div className="flex flex-1 h-[calc(100vh-64px)] overflow-hidden">
 
-        {/* Left panel */}
+        {/* Left panel — session list */}
         <div className={`flex-col w-full md:w-2/5 border-r border-gray-200 bg-white overflow-hidden
           ${mobileView === 'chat' ? 'hidden md:flex' : 'flex'}`}>
           <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
@@ -253,16 +278,19 @@ const StudentDoubtsPage = () => {
                   {(s.teacherId?.fullName || s.teacherId?.username || '?').charAt(0).toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <p className="font-medium text-gray-900 text-sm truncate">{s.teacherId?.fullName || s.teacherId?.username}</p>
-                    <span className="text-xs text-gray-400 ml-2 flex-shrink-0">{timeAgo(s.lastMessageAt)}</span>
+                  <div className="flex items-center justify-between gap-2">
+                    {/* Title is the doubt question — most prominent */}
+                    <p className="font-medium text-gray-900 text-sm truncate">{s.title || 'Doubt'}</p>
+                    <span className="text-xs text-gray-400 flex-shrink-0">{timeAgo(s.lastMessageAt)}</span>
                   </div>
-                  <p className="text-xs text-gray-500">{s.batchId?.name}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    To: {s.teacherId?.fullName || s.teacherId?.username} · {s.batchId?.name}
+                  </p>
                   <p className="text-xs text-gray-400 truncate mt-0.5">
                     {s.lastMessage?.type === 'image' ? '📷 Image' : s.lastMessage?.type === 'voice' ? '🎤 Voice note' : s.lastMessage?.text || '—'}
                   </p>
                 </div>
-                <div className="flex flex-col gap-1 flex-shrink-0 items-end">
+                <div className="flex flex-col gap-1 flex-shrink-0 items-end pt-0.5">
                   {s.isSavedByStudent && <span className="text-xs bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full">Saved</span>}
                   {s.status === 'resolved' && <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">Done</span>}
                 </div>
@@ -271,7 +299,7 @@ const StudentDoubtsPage = () => {
           </div>
         </div>
 
-        {/* Right panel */}
+        {/* Right panel — chat */}
         <div className={`flex-col flex-1 bg-gray-50 overflow-hidden
           ${mobileView === 'list' && !activeSession ? 'hidden md:flex' : 'flex'}`}>
 
@@ -279,11 +307,12 @@ const StudentDoubtsPage = () => {
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center">
                 <p className="text-5xl mb-4">💬</p>
-                <p className="font-medium text-gray-600">Select a conversation to open chat</p>
+                <p className="font-medium text-gray-600">Select a doubt to open chat</p>
               </div>
             </div>
           ) : (
             <>
+              {/* Chat header */}
               <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3 flex-shrink-0">
                 <button onClick={() => { setMobileView('list'); setActiveSession(null) }}
                   className="md:hidden text-gray-500 p-1 hover:text-gray-700">←</button>
@@ -291,8 +320,11 @@ const StudentDoubtsPage = () => {
                   {(activeSession.teacherId?.fullName || '?').charAt(0).toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-gray-900 text-sm">{activeSession.teacherId?.fullName || activeSession.teacherId?.username}</p>
-                  <p className="text-xs text-gray-400">{activeSession.teacherId?.subject} · {activeSession.batchId?.name}</p>
+                  <p className="font-semibold text-gray-900 text-sm truncate">{activeSession.title || 'Doubt'}</p>
+                  <p className="text-xs text-gray-400">
+                    {activeSession.teacherId?.fullName || activeSession.teacherId?.username}
+                    {activeSession.teacherId?.subject ? ` · ${activeSession.teacherId.subject}` : ''}
+                  </p>
                 </div>
                 <div className="flex items-center gap-2">
                   {activeSession.status === 'resolved' && (
@@ -309,10 +341,11 @@ const StudentDoubtsPage = () => {
                 </div>
               </div>
 
+              {/* Messages */}
               <div className="flex-1 overflow-y-auto px-4 py-4">
                 {messages.length === 0
                   ? <p className="text-center text-gray-400 text-sm py-8">Loading messages...</p>
-                  : messages.map(m => <MessageBubble key={m._id} msg={m} />)
+                  : messages.map(m => <MessageBubble key={m._id} msg={m} onImageClick={setLightboxSrc} />)
                 }
                 <div ref={msgEndRef} />
               </div>
@@ -349,7 +382,7 @@ const StudentDoubtsPage = () => {
                 <textarea
                   value={replyText} onChange={e => setReplyText(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendReply() } }}
-                  placeholder={recording ? 'Recording...' : 'Type a message... (Enter to send)'}
+                  placeholder={recording ? 'Recording...' : 'Type a message...'}
                   rows={1}
                   className="flex-1 px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
                 />
@@ -369,7 +402,7 @@ const StudentDoubtsPage = () => {
         <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-xl max-h-[90vh] overflow-y-auto">
             <h2 className="font-semibold text-gray-900 mb-1">Ask a doubt</h2>
-            <p className="text-sm text-gray-500 mb-4">Select one or more teachers and describe your question</p>
+            <p className="text-sm text-gray-500 mb-4">Each doubt opens as a separate chat thread</p>
 
             {teachers.length === 0 ? (
               <p className="text-sm text-gray-400 py-4 text-center">No teachers assigned to your batch yet</p>
