@@ -1,13 +1,22 @@
 const Attendance = require('../models/Attendance');
 const Student = require('../models/Student');
 
+// Returns true if the user is allowed to access the given batch.
+// Admins always pass. Teachers are checked against their assignedBatches.
+const canAccessBatch = (user, batchId) => {
+  if (user.role !== 'teacher') return true;
+  return user.assignedBatches.map(id => id.toString()).includes(batchId.toString());
+};
+
 const markAttendance = async (req, res, next) => {
   try {
     const { batchId, date, records } = req.body;
     if (!batchId || !date || !records || !Array.isArray(records)) {
       return res.status(400).json({ success: false, message: 'batchId, date and records are required' });
     }
-
+    if (!canAccessBatch(req.user, batchId)) {
+      return res.status(403).json({ success: false, message: 'You are not assigned to this batch' });
+    }
     const ops = records.map(({ studentId, status }) => ({
       updateOne: {
         filter: { studentId, date },
@@ -15,7 +24,6 @@ const markAttendance = async (req, res, next) => {
         upsert: true,
       }
     }));
-
     await Attendance.bulkWrite(ops);
     res.json({ success: true, message: 'Attendance saved successfully' });
   } catch (error) {
@@ -28,6 +36,9 @@ const getAttendanceByBatchAndDate = async (req, res, next) => {
     const { batchId, date } = req.query;
     if (!batchId || !date) {
       return res.status(400).json({ success: false, message: 'batchId and date are required' });
+    }
+    if (!canAccessBatch(req.user, batchId)) {
+      return res.status(403).json({ success: false, message: 'You are not assigned to this batch' });
     }
     const records = await Attendance.find({ batchId, date })
       .populate('studentId', 'fullName');
@@ -60,7 +71,19 @@ const getAttendanceByStudent = async (req, res, next) => {
 
 const getBatchAttendanceSummary = async (req, res, next) => {
   try {
-    const { batchId } = req.params;
+    // 1. Updated to req.query as per instructions (or keep req.params if your routing depends on it)
+    const { batchId } = req.query; 
+
+    // 2. Added the missing presence check
+    if (!batchId) {
+      return res.status(400).json({ success: false, message: 'Batch ID is required' });
+    }
+
+    // 3. Added the requested access guard
+    if (!canAccessBatch(req.user, batchId)) {
+      return res.status(403).json({ success: false, message: 'You are not assigned to this batch' });
+    }
+
     const students = await Student.find({ batchId }).populate('userId', 'username');
     const summary = await Promise.all(students.map(async (student) => {
       const records = await Attendance.find({ studentId: student._id });
@@ -84,7 +107,19 @@ const getBatchAttendanceSummary = async (req, res, next) => {
 
 const getDatewiseAttendance = async (req, res, next) => {
   try {
-    const { batchId } = req.params;
+    // 1. Updated to req.query as per instructions
+    const { batchId } = req.query; 
+
+    // 2. Added the missing presence check
+    if (!batchId) {
+      return res.status(400).json({ success: false, message: 'Batch ID is required' });
+    }
+
+    // 3. Added the requested access guard
+    if (!canAccessBatch(req.user, batchId)) {
+      return res.status(403).json({ success: false, message: 'You are not assigned to this batch' });
+    }
+
     const records = await Attendance.find({ batchId }).sort({ date: 1 });
 
     const dateMap = {};

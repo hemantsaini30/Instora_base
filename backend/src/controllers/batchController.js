@@ -19,12 +19,16 @@ const createBatch = async (req, res, next) => {
 
 const getAllBatches = async (req, res, next) => {
   try {
-    const batches = await Batch.find().sort({ createdAt: -1 });
-    res.json({ success: true, data: batches });
+    const assignedBatches = req.user.assignedBatches ?? []
+    const query = req.user.role === 'teacher'
+      ? { _id: { $in: assignedBatches } }
+      : {}
+    const batches = await Batch.find(query).sort({ createdAt: -1 })
+    res.json({ success: true, data: batches })
   } catch (error) {
-    next(error);
+    next(error)
   }
-};
+}
 
 const deleteBatch = async (req, res, next) => {
   try {

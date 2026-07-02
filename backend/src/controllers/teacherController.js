@@ -19,6 +19,7 @@ const createTeacher = async (req, res, next) => {
       fullName,
       subject: subject || '',
       phone: phone || '',
+      assignedBatches: [],
     });
     res.status(201).json({
       success: true,
@@ -30,6 +31,7 @@ const createTeacher = async (req, res, next) => {
         subject: user.subject,
         phone: user.phone,
         role: user.role,
+        assignedBatches: [],
         createdAt: user.createdAt,
       }
     });
@@ -42,6 +44,7 @@ const getAllTeachers = async (req, res, next) => {
   try {
     const teachers = await User.find({ role: 'teacher' })
       .select('-password')
+      .populate('assignedBatches', 'name course')
       .sort({ createdAt: -1 });
     res.json({ success: true, data: teachers });
   } catch (error) {
@@ -79,4 +82,23 @@ const resetTeacherPassword = async (req, res, next) => {
   }
 };
 
-module.exports = { createTeacher, getAllTeachers, deleteTeacher, resetTeacherPassword };
+const assignBatches = async (req, res, next) => {
+  try {
+    const { batchIds } = req.body;
+    if (!Array.isArray(batchIds)) {
+      return res.status(400).json({ success: false, message: 'batchIds must be an array' });
+    }
+    const teacher = await User.findOne({ _id: req.params.id, role: 'teacher' });
+    if (!teacher) {
+      return res.status(404).json({ success: false, message: 'Teacher not found' });
+    }
+    teacher.assignedBatches = batchIds;
+    await teacher.save();
+    await teacher.populate('assignedBatches', 'name course');
+    res.json({ success: true, message: 'Batches assigned successfully', data: teacher.assignedBatches });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { createTeacher, getAllTeachers, deleteTeacher, resetTeacherPassword, assignBatches };

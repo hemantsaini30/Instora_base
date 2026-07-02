@@ -7,6 +7,7 @@ const userSchema = new mongoose.Schema({
   fullName: { type: String, default: '' },
   subject: { type: String, default: '' },
   phone: { type: String, default: '' },
+  assignedBatches: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Batch' }],
 }, { timestamps: true });
 
 module.exports = mongoose.model('User', userSchema);

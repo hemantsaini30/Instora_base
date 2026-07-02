@@ -1,12 +1,17 @@
 import { useEffect, useState } from 'react'
 import AdminLayout from '../../layouts/AdminLayout'
-import { getAllTeachers, createTeacher, deleteTeacher, resetTeacherPassword } from '../../services/teacherApi'
+import { getAllTeachers, createTeacher, deleteTeacher, resetTeacherPassword, assignTeacherBatches } from '../../services/teacherApi'
+import { getAllBatches } from '../../services/batchApi'
 
 const TeachersPage = () => {
   const [teachers, setTeachers] = useState([])
+  const [batches, setBatches] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [resetModal, setResetModal] = useState(null)
+  const [assignModal, setAssignModal] = useState(null)
+  const [assignedIds, setAssignedIds] = useState([])
+  const [assigning, setAssigning] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -24,7 +29,10 @@ const TeachersPage = () => {
     }
   }
 
-  useEffect(() => { fetchTeachers() }, [])
+  useEffect(() => {
+    fetchTeachers()
+    getAllBatches().then(res => setBatches(res.data.data)).catch(() => {})
+  }, [])
 
   const handleCreate = async (e) => {
     e.preventDefault()
@@ -70,6 +78,33 @@ const TeachersPage = () => {
     }
   }
 
+  const openAssignModal = (teacher) => {
+    setAssignModal(teacher)
+    setAssignedIds((teacher.assignedBatches || []).map(b => b._id))
+    setError('')
+  }
+
+  const toggleBatch = (batchId) => {
+    setAssignedIds(prev =>
+      prev.includes(batchId) ? prev.filter(id => id !== batchId) : [...prev, batchId]
+    )
+  }
+
+  const handleAssignBatches = async () => {
+    setAssigning(true)
+    setError('')
+    try {
+      await assignTeacherBatches(assignModal._id, assignedIds)
+      setAssignModal(null)
+      setSuccess(`Batches updated for ${assignModal.fullName || assignModal.username}`)
+      fetchTeachers()
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to assign batches')
+    } finally {
+      setAssigning(false)
+    }
+  }
+
   return (
     <AdminLayout>
       <div className="p-4 md:p-8">
@@ -103,63 +138,37 @@ const TeachersPage = () => {
             <form onSubmit={handleCreate} className="grid grid-cols-2 gap-4">
               <div className="flex flex-col gap-1">
                 <label className="text-sm font-medium text-gray-700">Full name</label>
-                <input
-                  type="text"
-                  value={form.fullName}
-                  onChange={(e) => setForm({ ...form, fullName: e.target.value })}
-                  placeholder="Teacher's full name"
-                  required
-                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+                <input type="text" value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })}
+                  placeholder="Teacher's full name" required
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-sm font-medium text-gray-700">Username</label>
-                <input
-                  type="text"
-                  value={form.username}
-                  onChange={(e) => setForm({ ...form, username: e.target.value })}
-                  placeholder="Login username"
-                  required
-                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+                <input type="text" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })}
+                  placeholder="Login username" required
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-sm font-medium text-gray-700">Password</label>
-                <input
-                  type="text"
-                  value={form.password}
-                  onChange={(e) => setForm({ ...form, password: e.target.value })}
-                  placeholder="Initial password"
-                  required
-                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+                <input type="text" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })}
+                  placeholder="Initial password" required
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-sm font-medium text-gray-700">Subject</label>
-                <input
-                  type="text"
-                  value={form.subject}
-                  onChange={(e) => setForm({ ...form, subject: e.target.value })}
+                <input type="text" value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })}
                   placeholder="e.g. Physics, Chemistry"
-                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-sm font-medium text-gray-700">Phone (optional)</label>
-                <input
-                  type="tel"
-                  value={form.phone}
-                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                <input type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}
                   placeholder="Teacher's phone number"
-                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <div className="col-span-2 flex justify-end">
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="bg-emerald-600 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors disabled:opacity-50"
-                >
+                <button type="submit" disabled={submitting}
+                  className="bg-emerald-600 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors disabled:opacity-50">
                   {submitting ? 'Creating...' : 'Create account'}
                 </button>
               </div>
@@ -182,6 +191,7 @@ const TeachersPage = () => {
                   <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Teacher</th>
                   <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Username</th>
                   <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Subject</th>
+                  <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Batches</th>
                   <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Phone</th>
                   <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Added</th>
                   <th className="px-5 py-3"></th>
@@ -205,12 +215,26 @@ const TeachersPage = () => {
                         : <span className="text-gray-300">—</span>
                       }
                     </td>
+                    <td className="px-5 py-4">
+                      {(teacher.assignedBatches || []).length === 0
+                        ? <span className="text-gray-300 text-sm">None</span>
+                        : <span className="bg-blue-50 text-blue-700 text-xs px-2 py-1 rounded-full font-medium">
+                            {teacher.assignedBatches.length} {teacher.assignedBatches.length === 1 ? 'batch' : 'batches'}
+                          </span>
+                      }
+                    </td>
                     <td className="px-5 py-4 text-gray-500">{teacher.phone || '—'}</td>
                     <td className="px-5 py-4 text-gray-400 text-xs">
                       {new Date(teacher.createdAt).toLocaleDateString('en-IN')}
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => openAssignModal(teacher)}
+                          className="text-xs text-purple-500 hover:text-purple-700 transition-colors"
+                        >
+                          Assign batches
+                        </button>
                         <button
                           onClick={() => { setResetModal(teacher); setNewPassword(''); setError('') }}
                           className="text-xs text-blue-500 hover:text-blue-700 transition-colors"
@@ -232,6 +256,7 @@ const TeachersPage = () => {
           </div>
         )}
 
+        {/* Reset password modal — unchanged */}
         {resetModal && (
           <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
             <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl">
@@ -242,36 +267,73 @@ const TeachersPage = () => {
               <form onSubmit={handleResetPassword} className="flex flex-col gap-4">
                 <div className="flex flex-col gap-1">
                   <label className="text-sm font-medium text-gray-700">New password</label>
-                  <input
-                    type="text"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="Minimum 6 characters"
-                    required
-                    minLength={6}
-                    className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+                  <input type="text" value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Minimum 6 characters" required minLength={6}
+                    className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
-                {error && (
-                  <p className="text-red-500 text-sm">{error}</p>
-                )}
+                {error && <p className="text-red-500 text-sm">{error}</p>}
                 <div className="flex gap-3 justify-end">
-                  <button
-                    type="button"
-                    onClick={() => setResetModal(null)}
-                    className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                  >
+                  <button type="button" onClick={() => setResetModal(null)}
+                    className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
                     Cancel
                   </button>
-                  <button
-                    type="submit"
-                    disabled={submitting}
-                    className="px-6 py-2 bg-blue-700 text-white text-sm rounded-lg font-medium hover:bg-blue-800 transition-colors disabled:opacity-50"
-                  >
+                  <button type="submit" disabled={submitting}
+                    className="px-6 py-2 bg-blue-700 text-white text-sm rounded-lg font-medium hover:bg-blue-800 transition-colors disabled:opacity-50">
                     {submitting ? 'Saving...' : 'Reset password'}
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* Assign batches modal — new */}
+        {assignModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
+              <h2 className="font-semibold text-gray-900 mb-1">Assign batches</h2>
+              <p className="text-sm text-gray-500 mb-4">
+                Select batches for <strong>{assignModal.fullName || assignModal.username}</strong>.
+                They will only see and interact with these batches.
+              </p>
+              {batches.length === 0 ? (
+                <p className="text-sm text-gray-400 py-6 text-center">No batches found. Create batches first.</p>
+              ) : (
+                <div className="flex flex-col gap-2 mb-5 max-h-64 overflow-y-auto pr-1">
+                  {batches.map(batch => (
+                    <label
+                      key={batch._id}
+                      className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                        assignedIds.includes(batch._id)
+                          ? 'border-purple-300 bg-purple-50'
+                          : 'border-gray-200 hover:bg-gray-50'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={assignedIds.includes(batch._id)}
+                        onChange={() => toggleBatch(batch._id)}
+                        className="accent-purple-600 w-4 h-4 flex-shrink-0"
+                      />
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">{batch.name}</p>
+                        <p className="text-xs text-gray-500">{batch.course}</p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              )}
+              {error && <p className="text-red-500 text-sm mb-3">{error}</p>}
+              <div className="flex gap-3 justify-end">
+                <button type="button" onClick={() => setAssignModal(null)}
+                  className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                  Cancel
+                </button>
+                <button onClick={handleAssignBatches} disabled={assigning}
+                  className="px-6 py-2 bg-purple-700 text-white text-sm rounded-lg font-medium hover:bg-purple-800 transition-colors disabled:opacity-50">
+                  {assigning ? 'Saving...' : `Save${assignedIds.length > 0 ? ` (${assignedIds.length})` : ''}`}
+                </button>
+              </div>
             </div>
           </div>
         )}
