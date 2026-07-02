@@ -6,8 +6,9 @@ const doubtMessageSchema = new mongoose.Schema({
   senderRole:   { type: String, enum: ['student', 'teacher'], required: true },
   type:         { type: String, enum: ['text', 'image', 'voice'], default: 'text' },
   text:         { type: String, default: '' },
-  fileData:     { type: String, default: '' },   // base64
-  fileMimeType: { type: String, default: '' },   // e.g. 'image/jpeg', 'audio/webm'
+  fileUrl:      { type: String, default: '' },       // Cloudinary secure URL
+  filePublicId: { type: String, default: '' },       // for deletion on cleanup
+  fileMimeType: { type: String, default: '' },
 }, { timestamps: true });
 
 module.exports = mongoose.model('DoubtMessage', doubtMessageSchema);

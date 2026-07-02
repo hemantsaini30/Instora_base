@@ -7,8 +7,6 @@ import {
 
 const MessageBubble = ({ msg }) => {
   const isMe = msg.senderRole === 'teacher'
-  const imgSrc  = msg.type === 'image' && msg.fileData ? `data:${msg.fileMimeType};base64,${msg.fileData}` : null
-  const audioSrc = msg.type === 'voice' && msg.fileData ? `data:${msg.fileMimeType || 'audio/webm'};base64,${msg.fileData}` : null
 
   const timeAgo = (d) => {
     const diff = Date.now() - new Date(d)
@@ -23,8 +21,12 @@ const MessageBubble = ({ msg }) => {
       <div className={`max-w-xs lg:max-w-sm rounded-2xl px-4 py-2.5 shadow-sm ${
         isMe ? 'bg-purple-600 text-white rounded-br-sm' : 'bg-white border border-gray-200 text-gray-800 rounded-bl-sm'
       }`}>
-        {imgSrc && <img src={imgSrc} alt="attachment" className="rounded-xl mb-1.5 max-w-full" style={{ maxHeight: 200 }} />}
-        {audioSrc && <audio controls src={audioSrc} className="w-52 mb-1" />}
+        {msg.type === 'image' && msg.fileUrl && (
+          <img src={msg.fileUrl} alt="attachment" className="rounded-xl mb-1.5 max-w-full" style={{ maxHeight: 200 }} />
+        )}
+        {msg.type === 'voice' && msg.fileUrl && (
+          <audio controls src={msg.fileUrl} className="w-52 mb-1" />
+        )}
         {msg.text && <p className="text-sm leading-relaxed">{msg.text}</p>}
         <p className={`text-xs mt-1 ${isMe ? 'text-purple-200' : 'text-gray-400'}`}>{timeAgo(msg.createdAt)}</p>
       </div>
@@ -33,32 +35,27 @@ const MessageBubble = ({ msg }) => {
 }
 
 const TeacherDoubtsPage = () => {
-  // data
-  const [grouped, setGrouped]               = useState([])   // [{batch, sessions}]
-  const [activeBatch, setActiveBatch]       = useState(null) // batch _id string
+  const [grouped, setGrouped]               = useState([])
+  const [activeBatch, setActiveBatch]       = useState(null)
   const [activeSession, setActiveSession]   = useState(null)
   const [messages, setMessages]             = useState([])
 
-  // reply
-  const [replyText, setReplyText]           = useState('')
-  const [replyImage, setReplyImage]         = useState(null)
-  const [replyImgPrev, setReplyImgPrev]     = useState(null)
-  const [audioBlob, setAudioBlob]           = useState(null)
-  const [recording, setRecording]           = useState(false)
-  const [sendingReply, setSendingReply]     = useState(false)
+  const [replyText, setReplyText]             = useState('')
+  const [replyImageFile, setReplyImageFile]   = useState(null)
+  const [replyImgPrev, setReplyImgPrev]       = useState(null)
+  const [audioBlob, setAudioBlob]             = useState(null)
+  const [recording, setRecording]             = useState(false)
+  const [sendingReply, setSendingReply]       = useState(false)
 
-  // ui
-  const [loading, setLoading]               = useState(true)
-  const [error, setError]                   = useState('')
-  const [mobileView, setMobileView]         = useState('sessions') // 'sessions' | 'chat'
+  const [loading, setLoading]     = useState(true)
+  const [error, setError]         = useState('')
+  const [mobileView, setMobileView] = useState('sessions')
 
-  const pollingRef  = useRef(null)
-  const msgEndRef   = useRef(null)
-  const mediaRef    = useRef(null)
-  const audioChunks = useRef([])
+  const pollingRef   = useRef(null)
+  const msgEndRef    = useRef(null)
+  const mediaRef     = useRef(null)
+  const audioChunks  = useRef([])
   const fileInputRef = useRef(null)
-
-  // ── fetch ──
 
   const fetchGrouped = useCallback(async () => {
     try { const r = await getSessionsForTeacher(); setGrouped(r.data.data) } catch {}
@@ -81,34 +78,20 @@ const TeacherDoubtsPage = () => {
 
   useEffect(() => { msgEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
-  // ── derived ──
-
-  // All sessions for the active batch (or all batches if none selected)
   const allSessions = grouped.flatMap(g => g.sessions.map(s => ({ ...s, _batchObj: g.batch })))
   const filteredSessions = activeBatch
     ? allSessions.filter(s => s.batchId?._id?.toString() === activeBatch)
     : allSessions
-
   const batches = grouped.map(g => g.batch)
-
-  // ── handlers ──
 
   const openSession = (s) => {
     setActiveSession(s); setMessages([]); setMobileView('chat')
-    setReplyText(''); setReplyImage(null); setReplyImgPrev(null); setAudioBlob(null)
+    setReplyText(''); setReplyImageFile(null); setReplyImgPrev(null); setAudioBlob(null)
   }
 
-  const readFile = (file) => new Promise(res => {
-    const r = new FileReader(); r.onload = e => res({ data: e.target.result.split(',')[1], mimeType: file.type }); r.readAsDataURL(file)
-  })
-
-  const blobToB64 = (blob) => new Promise(res => {
-    const r = new FileReader(); r.onload = () => res(r.result.split(',')[1]); r.readAsDataURL(blob)
-  })
-
-  const onReplyImg = async (e) => {
+  const onReplyImg = (e) => {
     const f = e.target.files[0]; if (!f) return
-    const result = await readFile(f); setReplyImage(result); setReplyImgPrev(URL.createObjectURL(f))
+    setReplyImageFile(f); setReplyImgPrev(URL.createObjectURL(f))
   }
 
   const startRec = async () => {
@@ -117,28 +100,37 @@ const TeacherDoubtsPage = () => {
       audioChunks.current = []
       const rec = new MediaRecorder(stream)
       rec.ondataavailable = e => { if (e.data.size > 0) audioChunks.current.push(e.data) }
-      rec.onstop = () => { setAudioBlob(new Blob(audioChunks.current, { type: 'audio/webm' })); stream.getTracks().forEach(t => t.stop()) }
+      rec.onstop = () => {
+        setAudioBlob(new Blob(audioChunks.current, { type: 'audio/webm' }))
+        stream.getTracks().forEach(t => t.stop())
+      }
       mediaRef.current = rec; rec.start(); setRecording(true)
     } catch { setError('Microphone access denied') }
   }
 
-  const stopRec = () => { if (mediaRef.current && recording) { mediaRef.current.stop(); setRecording(false) } }
+  const stopRec = () => {
+    if (mediaRef.current && recording) { mediaRef.current.stop(); setRecording(false) }
+  }
 
   const handleSendReply = async () => {
-    if (!activeSession || (!replyText.trim() && !replyImage && !audioBlob)) return
+    if (!activeSession || (!replyText.trim() && !replyImageFile && !audioBlob)) return
     setSendingReply(true); setError('')
     try {
-      let payload
+      const fd = new FormData()
       if (audioBlob) {
-        const b64 = await blobToB64(audioBlob)
-        payload = { type: 'voice', text: '', fileData: b64, fileMimeType: 'audio/webm' }
-      } else if (replyImage) {
-        payload = { type: 'image', text: replyText.trim(), fileData: replyImage.data, fileMimeType: replyImage.mimeType }
+        fd.append('type', 'voice')
+        fd.append('text', '')
+        fd.append('file', audioBlob, 'voice-note.webm')
+      } else if (replyImageFile) {
+        fd.append('type', 'image')
+        fd.append('text', replyText.trim())
+        fd.append('file', replyImageFile)
       } else {
-        payload = { type: 'text', text: replyText.trim() }
+        fd.append('type', 'text')
+        fd.append('text', replyText.trim())
       }
-      await apiSend(activeSession._id, payload)
-      setReplyText(''); setReplyImage(null); setReplyImgPrev(null); setAudioBlob(null)
+      await apiSend(activeSession._id, fd)
+      setReplyText(''); setReplyImageFile(null); setReplyImgPrev(null); setAudioBlob(null)
       await fetchMessages(activeSession._id); await fetchGrouped()
     } catch { setError('Failed to send') }
     finally { setSendingReply(false) }
@@ -170,17 +162,14 @@ const TeacherDoubtsPage = () => {
     return new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
   }
 
-  // ── render ──
-
   return (
     <TeacherLayout>
       <div className="flex h-[calc(100vh-53px)] md:h-screen overflow-hidden">
 
-        {/* Left: session list + batch filter */}
+        {/* Left: session list */}
         <div className={`flex-col bg-white border-r border-gray-200 overflow-hidden
           w-full md:w-80 ${mobileView === 'chat' ? 'hidden md:flex' : 'flex'}`}>
 
-          {/* Batch filter pills */}
           <div className="p-4 border-b border-gray-100 flex-shrink-0">
             <h2 className="font-semibold text-gray-900 mb-3">Doubts</h2>
             <div className="flex flex-wrap gap-2">
@@ -201,7 +190,6 @@ const TeacherDoubtsPage = () => {
             </div>
           </div>
 
-          {/* Session list */}
           <div className="flex-1 overflow-y-auto">
             {loading ? (
               <p className="text-center text-gray-400 text-sm py-8">Loading...</p>
@@ -249,7 +237,6 @@ const TeacherDoubtsPage = () => {
             </div>
           ) : (
             <>
-              {/* Chat header */}
               <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3 flex-shrink-0">
                 <button onClick={() => { setMobileView('sessions'); setActiveSession(null) }}
                   className="md:hidden text-gray-500 p-1">←</button>
@@ -281,7 +268,6 @@ const TeacherDoubtsPage = () => {
                 </div>
               </div>
 
-              {/* Messages */}
               <div className="flex-1 overflow-y-auto px-4 py-4">
                 {messages.length === 0
                   ? <p className="text-center text-gray-400 text-sm py-8">Loading messages...</p>
@@ -296,15 +282,13 @@ const TeacherDoubtsPage = () => {
                 </div>
               )}
 
-              {/* Image preview */}
               {replyImgPrev && (
                 <div className="px-4 py-2 bg-white border-t border-gray-100 flex items-center gap-2 flex-shrink-0">
                   <img src={replyImgPrev} alt="preview" className="h-14 w-14 object-cover rounded-lg" />
-                  <button onClick={() => { setReplyImage(null); setReplyImgPrev(null) }} className="text-red-400 text-sm">✕ Remove</button>
+                  <button onClick={() => { setReplyImageFile(null); setReplyImgPrev(null) }} className="text-red-400 text-sm">✕ Remove</button>
                 </div>
               )}
 
-              {/* Audio preview */}
               {audioBlob && (
                 <div className="px-4 py-2 bg-white border-t border-gray-100 flex items-center gap-2 flex-shrink-0">
                   <audio controls src={URL.createObjectURL(audioBlob)} className="h-8 flex-1" />
@@ -312,7 +296,6 @@ const TeacherDoubtsPage = () => {
                 </div>
               )}
 
-              {/* Input */}
               <div className="bg-white border-t border-gray-200 px-4 py-3 flex items-end gap-2 flex-shrink-0">
                 <input type="file" accept="image/*" ref={fileInputRef} className="hidden" onChange={onReplyImg} />
                 <button onClick={() => fileInputRef.current?.click()}
@@ -331,7 +314,7 @@ const TeacherDoubtsPage = () => {
                   className="flex-1 px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
                 />
                 <button onClick={handleSendReply}
-                  disabled={sendingReply || (!replyText.trim() && !replyImage && !audioBlob)}
+                  disabled={sendingReply || (!replyText.trim() && !replyImageFile && !audioBlob)}
                   className="bg-purple-700 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-purple-800 disabled:opacity-50 transition-colors flex-shrink-0">
                   {sendingReply ? '...' : 'Send'}
                 </button>

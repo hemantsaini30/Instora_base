@@ -1,9 +1,10 @@
-const Student      = require('../models/Student');
-const User         = require('../models/User');
-const DoubtSession = require('../models/DoubtSession');
-const DoubtMessage = require('../models/DoubtMessage');
+const Student          = require('../models/Student');
+const User             = require('../models/User');
+const DoubtSession     = require('../models/DoubtSession');
+const DoubtMessage     = require('../models/DoubtMessage');
+const { uploadToCloudinary } = require('../config/cloudinary');
 
-// ─── helpers ───────────────────────────────────────────────
+// ─── helpers ────────────────────────────────────────────────
 
 const findStudent = (userId) =>
   Student.findOne({ userId }).populate('batchId', '_id name course');
@@ -22,7 +23,17 @@ const attachLastMessage = async (sessions) =>
     return { ...s.toObject(), lastMessage: last };
   }));
 
-// ─── student: list available teachers ──────────────────────
+const uploadFile = async (file) => {
+  if (!file) return { fileUrl: '', filePublicId: '', fileMimeType: '' };
+  const isVoice = file.mimetype.startsWith('audio/');
+  const result = await uploadToCloudinary(file.buffer, {
+    resource_type: isVoice ? 'video' : 'image',
+    folder: isVoice ? 'instora/doubts/voice' : 'instora/doubts/images',
+  });
+  return { fileUrl: result.secure_url, filePublicId: result.public_id, fileMimeType: file.mimetype };
+};
+
+// ─── student: list available teachers ───────────────────────
 
 const getAvailableTeachers = async (req, res, next) => {
   try {
@@ -55,21 +66,25 @@ const getAvailableTeachers = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// ─── student: create session(s) + initial message ──────────
+// ─── student: create session(s) + initial message ───────────
 
 const createSessions = async (req, res, next) => {
   try {
-    const { teacherIds, batchId, text, type, fileData, fileMimeType } = req.body;
+    let { teacherIds, batchId, text, type } = req.body;
 
+    // FormData sends repeated fields as string when count=1, array when count>1
+    if (typeof teacherIds === 'string') teacherIds = [teacherIds];
     if (!Array.isArray(teacherIds) || !teacherIds.length)
       return res.status(400).json({ success: false, message: 'Select at least one teacher' });
     if (!batchId)
       return res.status(400).json({ success: false, message: 'batchId is required' });
-    if (!text && !fileData)
+    if (!text && !req.file)
       return res.status(400).json({ success: false, message: 'Message cannot be empty' });
 
     const student = await findStudent(req.user._id);
     if (!student) return res.status(404).json({ success: false, message: 'Student profile not found' });
+
+    const { fileUrl, filePublicId, fileMimeType } = await uploadFile(req.file);
 
     const sessionIds = [];
     for (const teacherId of teacherIds) {
@@ -83,8 +98,9 @@ const createSessions = async (req, res, next) => {
         senderRole: 'student',
         type: type || 'text',
         text: text || '',
-        fileData: fileData || '',
-        fileMimeType: fileMimeType || '',
+        fileUrl,
+        filePublicId,
+        fileMimeType,
       });
       session.lastMessageAt = new Date();
       session.status = 'open';
@@ -96,7 +112,7 @@ const createSessions = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// ─── student: list my sessions ─────────────────────────────
+// ─── student: list my sessions ──────────────────────────────
 
 const getMySessionsStudent = async (req, res, next) => {
   try {
@@ -108,12 +124,11 @@ const getMySessionsStudent = async (req, res, next) => {
       .populate('batchId', 'name course')
       .sort({ lastMessageAt: -1 });
 
-    const data = await attachLastMessage(sessions);
-    res.json({ success: true, data });
+    res.json({ success: true, data: await attachLastMessage(sessions) });
   } catch (err) { next(err); }
 };
 
-// ─── teacher: list sessions grouped by batch ───────────────
+// ─── teacher: list sessions grouped by batch ────────────────
 
 const getSessionsForTeacher = async (req, res, next) => {
   try {
@@ -135,7 +150,7 @@ const getSessionsForTeacher = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// ─── shared: get messages ──────────────────────────────────
+// ─── shared: get messages ────────────────────────────────────
 
 const getMessages = async (req, res, next) => {
   try {
@@ -156,12 +171,12 @@ const getMessages = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// ─── shared: send message ──────────────────────────────────
+// ─── shared: send message ────────────────────────────────────
 
 const sendMessage = async (req, res, next) => {
   try {
-    const { text, type, fileData, fileMimeType } = req.body;
-    if (!text && !fileData)
+    const { text, type } = req.body;
+    if (!text && !req.file)
       return res.status(400).json({ success: false, message: 'Message cannot be empty' });
 
     const session = await DoubtSession.findById(req.params.id);
@@ -176,14 +191,17 @@ const sendMessage = async (req, res, next) => {
         return res.status(403).json({ success: false, message: 'Access denied' });
     }
 
+    const { fileUrl, filePublicId, fileMimeType } = await uploadFile(req.file);
+
     const message = await DoubtMessage.create({
       sessionId: session._id,
-      senderId: req.user._id,
+      senderId:  req.user._id,
       senderRole: req.user.role,
       type: type || 'text',
       text: text || '',
-      fileData: fileData || '',
-      fileMimeType: fileMimeType || '',
+      fileUrl,
+      filePublicId,
+      fileMimeType,
     });
 
     session.lastMessageAt = new Date();
@@ -194,7 +212,7 @@ const sendMessage = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// ─── shared: toggle save ───────────────────────────────────
+// ─── shared: toggle save ─────────────────────────────────────
 
 const toggleSave = async (req, res, next) => {
   try {
@@ -217,7 +235,7 @@ const toggleSave = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// ─── teacher: resolve ──────────────────────────────────────
+// ─── teacher: resolve ────────────────────────────────────────
 
 const resolveSession = async (req, res, next) => {
   try {
