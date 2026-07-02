@@ -1,0 +1,481 @@
+import { useEffect, useState, useRef, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../../context/AuthContext'
+import { getMyProfile } from '../../services/studentApi'
+import {
+  getAvailableTeachers, createDoubSessions, getMySessionsStudent,
+  getMessages, sendMessage as apiSend, toggleSave,
+} from '../../services/doubtApi'
+
+// ─── shared sub-components ───────────────────────────────────────────
+
+const MessageBubble = ({ msg }) => {
+  const isMe = msg.senderRole === 'student'
+  const audioSrc = msg.type === 'voice' && msg.fileData
+    ? `data:${msg.fileMimeType || 'audio/webm'};base64,${msg.fileData}` : null
+  const imgSrc = msg.type === 'image' && msg.fileData
+    ? `data:${msg.fileMimeType};base64,${msg.fileData}` : null
+
+  const timeAgo = (d) => {
+    const diff = Date.now() - new Date(d)
+    if (diff < 60000) return 'just now'
+    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`
+    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`
+    return new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+  }
+
+  return (
+    <div className={`flex ${isMe ? 'justify-end' : 'justify-start'} mb-3`}>
+      <div className={`max-w-xs lg:max-w-sm rounded-2xl px-4 py-2.5 shadow-sm ${
+        isMe ? 'bg-purple-600 text-white rounded-br-sm' : 'bg-white border border-gray-200 text-gray-800 rounded-bl-sm'
+      }`}>
+        {imgSrc && (
+          <img src={imgSrc} alt="attachment" className="rounded-xl mb-1.5 max-w-full cursor-pointer" style={{ maxHeight: 200 }} />
+        )}
+        {audioSrc && (
+          <audio controls src={audioSrc} className="w-52 mb-1" />
+        )}
+        {msg.text && <p className="text-sm leading-relaxed">{msg.text}</p>}
+        <p className={`text-xs mt-1 ${isMe ? 'text-purple-200' : 'text-gray-400'}`}>{timeAgo(msg.createdAt)}</p>
+      </div>
+    </div>
+  )
+}
+
+// ─── main page ───────────────────────────────────────────────────────
+
+const StudentDoubtsPage = () => {
+  const { user, logout } = useAuth()
+  const navigate = useNavigate()
+
+  // data
+  const [sessions, setSessions]         = useState([])
+  const [activeSession, setActiveSession] = useState(null)
+  const [messages, setMessages]         = useState([])
+  const [teachers, setTeachers]         = useState([])
+  const [studentBatchId, setStudentBatchId] = useState(null)
+
+  // new doubt modal
+  const [showNew, setShowNew]           = useState(false)
+  const [selTeachers, setSelTeachers]   = useState([])
+  const [newText, setNewText]           = useState('')
+  const [newImage, setNewImage]         = useState(null)
+  const [newImgPrev, setNewImgPrev]     = useState(null)
+  const [sendingDoubt, setSendingDoubt] = useState(false)
+
+  // reply
+  const [replyText, setReplyText]       = useState('')
+  const [replyImage, setReplyImage]     = useState(null)
+  const [replyImgPrev, setReplyImgPrev] = useState(null)
+  const [audioBlob, setAudioBlob]       = useState(null)
+  const [recording, setRecording]       = useState(false)
+  const [sendingReply, setSendingReply] = useState(false)
+
+  // ui
+  const [loading, setLoading]           = useState(true)
+  const [error, setError]               = useState('')
+  const [mobileView, setMobileView]     = useState('list')
+
+  // refs
+  const pollingRef     = useRef(null)
+  const msgEndRef      = useRef(null)
+  const mediaRef       = useRef(null)
+  const audioChunks    = useRef([])
+  const replyFileRef   = useRef(null)
+  const newFileRef     = useRef(null)
+
+  // ── fetch helpers ──
+
+  const fetchSessions = useCallback(async () => {
+    try {
+      const r = await getMySessionsStudent()
+      setSessions(r.data.data)
+    } catch {}
+  }, [])
+
+  const fetchMessages = useCallback(async (id) => {
+    try {
+      const r = await getMessages(id)
+      setMessages(r.data.data)
+    } catch {}
+  }, [])
+
+  useEffect(() => {
+    const init = async () => {
+      try {
+        const [profRes, tchRes, sesRes] = await Promise.all([
+          getMyProfile(), getAvailableTeachers(), getMySessionsStudent(),
+        ])
+        setStudentBatchId(profRes.data.data?.batchId?._id || profRes.data.data?.batchId)
+        setTeachers(tchRes.data.data.teachers || tchRes.data.data)
+        setSessions(sesRes.data.data)
+      } catch { setError('Failed to load doubts') }
+      finally { setLoading(false) }
+    }
+    init()
+  }, [])
+
+  useEffect(() => {
+    clearInterval(pollingRef.current)
+    if (activeSession) {
+      fetchMessages(activeSession._id)
+      pollingRef.current = setInterval(() => fetchMessages(activeSession._id), 6000)
+    }
+    return () => clearInterval(pollingRef.current)
+  }, [activeSession, fetchMessages])
+
+  useEffect(() => { msgEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
+
+  // ── handlers ──
+
+  const openSession = (s) => {
+    setActiveSession(s); setMessages([]); setMobileView('chat')
+    setReplyText(''); setReplyImage(null); setReplyImgPrev(null); setAudioBlob(null)
+  }
+
+  const readFile = (file) => new Promise(res => {
+    const r = new FileReader()
+    r.onload = e => res({ data: e.target.result.split(',')[1], mimeType: file.type })
+    r.readAsDataURL(file)
+  })
+
+  const blobToB64 = (blob) => new Promise(res => {
+    const r = new FileReader(); r.onload = () => res(r.result.split(',')[1]); r.readAsDataURL(blob)
+  })
+
+  const onNewImg = async (e) => {
+    const f = e.target.files[0]; if (!f) return
+    const result = await readFile(f)
+    setNewImage(result); setNewImgPrev(URL.createObjectURL(f))
+  }
+
+  const onReplyImg = async (e) => {
+    const f = e.target.files[0]; if (!f) return
+    const result = await readFile(f)
+    setReplyImage(result); setReplyImgPrev(URL.createObjectURL(f))
+  }
+
+  const startRec = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      audioChunks.current = []
+      const rec = new MediaRecorder(stream)
+      rec.ondataavailable = e => { if (e.data.size > 0) audioChunks.current.push(e.data) }
+      rec.onstop = () => {
+        setAudioBlob(new Blob(audioChunks.current, { type: 'audio/webm' }))
+        stream.getTracks().forEach(t => t.stop())
+      }
+      mediaRef.current = rec; rec.start(); setRecording(true)
+    } catch { setError('Microphone access denied') }
+  }
+
+  const stopRec = () => {
+    if (mediaRef.current && recording) { mediaRef.current.stop(); setRecording(false) }
+  }
+
+  const handleSendDoubt = async () => {
+    if (!selTeachers.length) return setError('Select at least one teacher')
+    if (!newText.trim() && !newImage) return setError('Type your doubt or attach an image')
+    if (!studentBatchId) return setError('Could not determine your batch')
+    setSendingDoubt(true); setError('')
+    try {
+      await createDoubSessions({
+        teacherIds: selTeachers, batchId: studentBatchId,
+        text: newText.trim(), type: newImage ? 'image' : 'text',
+        fileData: newImage?.data || '', fileMimeType: newImage?.mimeType || '',
+      })
+      setShowNew(false); setSelTeachers([]); setNewText(''); setNewImage(null); setNewImgPrev(null)
+      await fetchSessions()
+    } catch (err) { setError(err.response?.data?.message || 'Failed to send doubt') }
+    finally { setSendingDoubt(false) }
+  }
+
+  const handleSendReply = async () => {
+    if (!activeSession || (!replyText.trim() && !replyImage && !audioBlob)) return
+    setSendingReply(true); setError('')
+    try {
+      let payload
+      if (audioBlob) {
+        const b64 = await blobToB64(audioBlob)
+        payload = { type: 'voice', text: '', fileData: b64, fileMimeType: 'audio/webm' }
+      } else if (replyImage) {
+        payload = { type: 'image', text: replyText.trim(), fileData: replyImage.data, fileMimeType: replyImage.mimeType }
+      } else {
+        payload = { type: 'text', text: replyText.trim() }
+      }
+      await apiSend(activeSession._id, payload)
+      setReplyText(''); setReplyImage(null); setReplyImgPrev(null); setAudioBlob(null)
+      await fetchMessages(activeSession._id); await fetchSessions()
+    } catch { setError('Failed to send message') }
+    finally { setSendingReply(false) }
+  }
+
+  const handleToggleSave = async () => {
+    if (!activeSession) return
+    try {
+      const r = await toggleSave(activeSession._id)
+      setActiveSession(p => ({ ...p, isSavedByStudent: r.data.data.isSavedByStudent }))
+      await fetchSessions()
+    } catch { setError('Failed to update') }
+  }
+
+  const timeAgo = (d) => {
+    const diff = Date.now() - new Date(d)
+    if (diff < 60000) return 'just now'
+    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`
+    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`
+    return new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+  }
+
+  // ── render ──
+
+  return (
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+
+      {/* Header */}
+      <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between sticky top-0 z-10 h-16">
+        <span className="text-xl font-bold text-blue-800">Inst<span className="text-emerald-600">ora</span></span>
+        <nav className="flex items-center gap-1">
+          {[
+            { label: 'Dashboard', path: '/student/dashboard' },
+            { label: 'Tests', path: '/student/tests' },
+            { label: 'Doubts', path: '/student/doubts', active: true },
+          ].map(n => (
+            <button key={n.path} onClick={() => navigate(n.path)}
+              className={`text-sm px-3 py-1.5 rounded-lg font-medium ${n.active ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-100'}`}>
+              {n.label}
+            </button>
+          ))}
+        </nav>
+        <div className="flex items-center gap-4">
+          <span className="text-sm text-gray-500 hidden sm:block">{user?.username}</span>
+          <button onClick={() => { logout(); navigate('/login') }} className="text-sm text-gray-400 hover:text-gray-600">Sign out</button>
+        </div>
+      </header>
+
+      {/* Split layout */}
+      <div className="flex flex-1 h-[calc(100vh-64px)] overflow-hidden">
+
+        {/* Left panel — session list */}
+        <div className={`flex-col w-full md:w-2/5 border-r border-gray-200 bg-white overflow-hidden
+          ${mobileView === 'chat' ? 'hidden md:flex' : 'flex'}`}>
+          <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
+            <h2 className="font-semibold text-gray-900">My Doubts</h2>
+            <button onClick={() => { setShowNew(true); setError('') }}
+              className="bg-purple-700 text-white text-xs px-3 py-1.5 rounded-lg font-medium hover:bg-purple-800 transition-colors">
+              + Ask doubt
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto">
+            {loading ? (
+              <p className="text-center text-gray-400 text-sm py-8">Loading...</p>
+            ) : sessions.length === 0 ? (
+              <div className="text-center py-16 px-6">
+                <p className="text-4xl mb-3">💬</p>
+                <p className="font-medium text-gray-700">No doubts yet</p>
+                <p className="text-sm text-gray-400 mt-1">Click "Ask doubt" to send your first question</p>
+              </div>
+            ) : sessions.map(s => (
+              <div key={s._id} onClick={() => openSession(s)}
+                className={`flex items-start gap-3 px-4 py-3.5 cursor-pointer border-b border-gray-50 hover:bg-gray-50 transition-colors
+                  ${activeSession?._id === s._id ? 'bg-purple-50 border-l-4 border-l-purple-600' : ''}`}>
+                <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-purple-700 font-bold text-sm flex-shrink-0">
+                  {(s.teacherId?.fullName || s.teacherId?.username || '?').charAt(0).toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <p className="font-medium text-gray-900 text-sm truncate">{s.teacherId?.fullName || s.teacherId?.username}</p>
+                    <span className="text-xs text-gray-400 ml-2 flex-shrink-0">{timeAgo(s.lastMessageAt)}</span>
+                  </div>
+                  <p className="text-xs text-gray-500">{s.batchId?.name}</p>
+                  <p className="text-xs text-gray-400 truncate mt-0.5">
+                    {s.lastMessage?.type === 'image' ? '📷 Image' : s.lastMessage?.type === 'voice' ? '🎤 Voice note' : s.lastMessage?.text || '—'}
+                  </p>
+                </div>
+                <div className="flex flex-col gap-1 flex-shrink-0 items-end">
+                  {s.isSavedByStudent && <span className="text-xs bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full">Saved</span>}
+                  {s.status === 'resolved' && <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">Done</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Right panel — chat */}
+        <div className={`flex-col flex-1 bg-gray-50 overflow-hidden
+          ${mobileView === 'list' && !activeSession ? 'hidden md:flex' : 'flex'}`}>
+
+          {!activeSession ? (
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center">
+                <p className="text-5xl mb-4">💬</p>
+                <p className="font-medium text-gray-600">Select a conversation to open chat</p>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Chat header */}
+              <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3 flex-shrink-0">
+                <button onClick={() => { setMobileView('list'); setActiveSession(null) }}
+                  className="md:hidden text-gray-500 p-1 hover:text-gray-700">←</button>
+                <div className="w-9 h-9 rounded-full bg-purple-100 flex items-center justify-center text-purple-700 font-bold text-sm flex-shrink-0">
+                  {(activeSession.teacherId?.fullName || '?').charAt(0).toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-gray-900 text-sm">{activeSession.teacherId?.fullName || activeSession.teacherId?.username}</p>
+                  <p className="text-xs text-gray-400">{activeSession.teacherId?.subject} · {activeSession.batchId?.name}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {activeSession.status === 'resolved' && (
+                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">Resolved</span>
+                  )}
+                  <button onClick={handleToggleSave}
+                    className={`text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors ${
+                      activeSession.isSavedByStudent
+                        ? 'bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100'
+                        : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'
+                    }`}>
+                    {activeSession.isSavedByStudent ? '✓ Saved' : 'Save doubt'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Messages */}
+              <div className="flex-1 overflow-y-auto px-4 py-4">
+                {messages.length === 0
+                  ? <p className="text-center text-gray-400 text-sm py-8">Loading messages...</p>
+                  : messages.map(m => <MessageBubble key={m._id} msg={m} />)
+                }
+                <div ref={msgEndRef} />
+              </div>
+
+              {/* Error */}
+              {error && (
+                <div className="px-4 py-2 bg-red-50 border-t border-red-100 flex-shrink-0">
+                  <p className="text-xs text-red-500">{error}</p>
+                </div>
+              )}
+
+              {/* Image preview */}
+              {replyImgPrev && (
+                <div className="px-4 py-2 bg-white border-t border-gray-100 flex items-center gap-2 flex-shrink-0">
+                  <img src={replyImgPrev} alt="preview" className="h-14 w-14 object-cover rounded-lg" />
+                  <button onClick={() => { setReplyImage(null); setReplyImgPrev(null) }} className="text-red-400 text-sm">✕ Remove</button>
+                </div>
+              )}
+
+              {/* Audio preview */}
+              {audioBlob && (
+                <div className="px-4 py-2 bg-white border-t border-gray-100 flex items-center gap-2 flex-shrink-0">
+                  <audio controls src={URL.createObjectURL(audioBlob)} className="h-8 flex-1" />
+                  <button onClick={() => setAudioBlob(null)} className="text-red-400 text-sm">✕</button>
+                </div>
+              )}
+
+              {/* Input bar */}
+              <div className="bg-white border-t border-gray-200 px-4 py-3 flex items-end gap-2 flex-shrink-0">
+                <input type="file" accept="image/*" ref={replyFileRef} className="hidden" onChange={onReplyImg} />
+                <button onClick={() => replyFileRef.current?.click()}
+                  className="text-gray-400 hover:text-purple-600 transition-colors p-1.5 text-lg" title="Attach image">📎</button>
+                <button
+                  onMouseDown={startRec} onMouseUp={stopRec}
+                  onTouchStart={startRec} onTouchEnd={stopRec}
+                  className={`p-1.5 text-lg transition-colors ${recording ? 'text-red-500 animate-pulse' : 'text-gray-400 hover:text-purple-600'}`}
+                  title="Hold to record voice">🎤</button>
+                <textarea
+                  value={replyText} onChange={e => setReplyText(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendReply() } }}
+                  placeholder={recording ? 'Recording...' : 'Type a message... (Enter to send)'}
+                  rows={1}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
+                />
+                <button onClick={handleSendReply}
+                  disabled={sendingReply || (!replyText.trim() && !replyImage && !audioBlob)}
+                  className="bg-purple-700 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-purple-800 disabled:opacity-50 transition-colors flex-shrink-0">
+                  {sendingReply ? '...' : 'Send'}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* New Doubt Modal */}
+      {showNew && (
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-xl max-h-[90vh] overflow-y-auto">
+            <h2 className="font-semibold text-gray-900 mb-1">Ask a doubt</h2>
+            <p className="text-sm text-gray-500 mb-4">Select one or more teachers and describe your question</p>
+
+            {teachers.length === 0 ? (
+              <p className="text-sm text-gray-400 py-4 text-center">No teachers assigned to your batch yet</p>
+            ) : (
+              <>
+                <div className="mb-4">
+                  <p className="text-sm font-medium text-gray-700 mb-2">Send to</p>
+                  <div className="flex flex-col gap-2 max-h-40 overflow-y-auto pr-1">
+                    {teachers.map(t => (
+                      <label key={t._id}
+                        className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                          selTeachers.includes(t._id) ? 'border-purple-300 bg-purple-50' : 'border-gray-200 hover:bg-gray-50'
+                        }`}>
+                        <input type="checkbox" checked={selTeachers.includes(t._id)}
+                          onChange={() => setSelTeachers(p => p.includes(t._id) ? p.filter(x => x !== t._id) : [...p, t._id])}
+                          className="accent-purple-600 w-4 h-4 flex-shrink-0" />
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{t.fullName}</p>
+                          <p className="text-xs text-gray-500">
+                            {t.subject && <span>{t.subject} · </span>}
+                            {t.sharedBatches?.map(b => b.name).join(', ')}
+                          </p>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="mb-4">
+                  <p className="text-sm font-medium text-gray-700 mb-2">Your doubt</p>
+                  <textarea value={newText} onChange={e => setNewText(e.target.value)}
+                    placeholder="Describe your doubt in detail..." rows={4}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none" />
+                </div>
+
+                <div className="mb-4">
+                  <input type="file" accept="image/*" ref={newFileRef} className="hidden" onChange={onNewImg} />
+                  {newImgPrev ? (
+                    <div className="flex items-center gap-3">
+                      <img src={newImgPrev} alt="preview" className="h-20 w-20 object-cover rounded-lg" />
+                      <button onClick={() => { setNewImage(null); setNewImgPrev(null) }} className="text-sm text-red-400 hover:text-red-600">✕ Remove</button>
+                    </div>
+                  ) : (
+                    <button onClick={() => newFileRef.current?.click()}
+                      className="text-sm text-purple-600 border border-dashed border-purple-300 px-4 py-2 rounded-lg hover:bg-purple-50 transition-colors">
+                      📷 Attach image (optional)
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+
+            {error && <p className="text-red-500 text-sm mb-3">{error}</p>}
+
+            <div className="flex gap-3 justify-end">
+              <button onClick={() => { setShowNew(false); setError(''); setSelTeachers([]); setNewText(''); setNewImage(null); setNewImgPrev(null) }}
+                className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                Cancel
+              </button>
+              <button onClick={handleSendDoubt} disabled={sendingDoubt || !selTeachers.length}
+                className="px-6 py-2 bg-purple-700 text-white text-sm rounded-lg font-medium hover:bg-purple-800 disabled:opacity-50 transition-colors">
+                {sendingDoubt ? 'Sending...' : `Send to ${selTeachers.length || ''} teacher${selTeachers.length !== 1 ? 's' : ''}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default StudentDoubtsPage

@@ -11,6 +11,7 @@ const TeacherLayout = ({ children }) => {
   const navItems = [
     { label: 'Dashboard', path: '/teacher/dashboard', icon: '⊞' },
     { label: 'Tests', path: '/teacher/tests', icon: '📝' },
+    { label: 'Doubts',    path: '/teacher/doubts',    icon: '💬' },
   ]
 
   const SidebarContent = () => (

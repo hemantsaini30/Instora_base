@@ -154,6 +154,12 @@ const StudentDashboard = () => {
           >
             Tests
           </button>
+          <button
+            onClick={() => navigate('/student/doubts')}
+            className="text-sm px-3 py-1.5 rounded-lg text-gray-500 hover:bg-gray-100"
+          >
+            Doubts
+          </button>
         </nav>
         <div className="flex items-center gap-4">
           <span className="text-sm text-gray-500 hidden sm:block">{user?.username}</span>
